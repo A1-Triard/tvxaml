@@ -20,6 +20,7 @@ struct ViewData {
     max_size: Vector,
     h_align: Option<HAlign>,
     v_align: Option<VAlign>,
+    margin: Thickness,
 }
 
 #[class_unsafe(basic_oop::inherited_from_Obj)]
@@ -48,6 +49,10 @@ pub struct View {
     v_align: fn() -> Option<VAlign>,
     #[non_virt]
     set_v_align: fn(value: Option<VAlign>),
+    #[non_virt]
+    margin: fn() -> Thickness,
+    #[non_virt]
+    set_margin: fn(value: Thickness),
     #[non_virt]
     desired_size: fn() -> Vector,
     #[non_virt]
@@ -80,6 +85,7 @@ impl View {
                 max_size: Vector { x: -1, y: -1 },
                 h_align: None,
                 v_align: None,
+                margin: Thickness::all(0),
                 measure_size: None,
                 desired_size: Vector::null(),
                 arrange_size: None,
@@ -104,7 +110,7 @@ impl View {
 
     pub fn set_min_size_impl(this: &Rc<dyn TView>, value: Vector) {
         this.view().data.borrow_mut().min_size = value;
-        this.invalidate_arrange();
+        this.invalidate_measure();
     }
 
     pub fn max_size_impl(this: &Rc<dyn TView>) -> Vector {
@@ -113,7 +119,7 @@ impl View {
 
     pub fn set_max_size_impl(this: &Rc<dyn TView>, value: Vector) {
         this.view().data.borrow_mut().max_size = value;
-        this.invalidate_arrange();
+        this.invalidate_measure();
     }
 
     pub fn h_align_impl(this: &Rc<dyn TView>) -> Option<HAlign> {
@@ -122,7 +128,7 @@ impl View {
 
     pub fn set_h_align_impl(this: &Rc<dyn TView>, value: Option<HAlign>) {
         this.view().data.borrow_mut().h_align = value;
-        this.invalidate_arrange();
+        this.invalidate_measure();
     }
 
     pub fn v_align_impl(this: &Rc<dyn TView>) -> Option<VAlign> {
@@ -131,7 +137,16 @@ impl View {
 
     pub fn set_v_align_impl(this: &Rc<dyn TView>, value: Option<VAlign>) {
         this.view().data.borrow_mut().v_align = value;
-        this.invalidate_arrange();
+        this.invalidate_measure();
+    }
+
+    pub fn margin_impl(this: &Rc<dyn TView>) -> Thickness {
+        this.view().data.borrow().margin
+    }
+
+    pub fn set_margin_impl(this: &Rc<dyn TView>, value: Thickness) {
+        this.view().data.borrow_mut().margin = value;
+        this.invalidate_measure();
     }
 
     pub fn invalidate_measure_impl(this: &Rc<dyn TView>) {
@@ -149,14 +164,18 @@ impl View {
             if Some((w, h)) == this.measure_size { return; }
             let g_w = if this.h_align.is_some() { None } else { w };
             let g_h = if this.v_align.is_some() { None } else { h };
-            let a = Vector { x: g_w.unwrap_or(0), y: g_h.unwrap_or(0) }.min(this.max_size).max(this.min_size);
+            let a = Vector { x: g_w.unwrap_or(0), y: g_h.unwrap_or(0) };
+            let a = this.margin.shrink_rect_size(a);
+            let a = a.min(this.max_size).max(this.min_size);
             (g_w.map(|_| a.x), g_h.map(|_| a.y))
         };
         let desired_size = this.measure_override(a_w, a_h);
         {
             let mut this = this.view().data.borrow_mut();
+            let desired_size = desired_size.min(this.max_size).max(this.min_size);
+            let desired_size = this.margin.expand_rect_size(desired_size);
             this.measure_size = Some((w, h));
-            this.desired_size = desired_size.min(this.max_size).max(this.min_size);
+            this.desired_size = desired_size;
         }
     }
 
@@ -178,10 +197,10 @@ impl View {
             if Some(rect.size) == data.arrange_size {
                 data.render_rect.size
             } else {
-                let a_size = rect.size.min(data.max_size).max(data.min_size);
+                let a_size = data.margin.shrink_rect_size(rect.size).min(data.max_size).max(data.min_size);
                 let render_size = this.arrange_override(a_size);
                 let data = this.view().data.borrow();
-                render_size.min(data.max_size).max(data.min_size)
+                data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size))
             }
         };
         let mut this = this.view().data.borrow_mut();
@@ -202,7 +221,7 @@ pub struct ViewVec {
     __mod__: ::tvxaml,
     owner: RefCell<rc::Weak<dyn TView>>,
     items: RefCell<Vec<Rc<dyn TView>>>,
-    #[non_virt]
+    #[virt]
     init: fn(owner: &Rc<dyn TView>),
     #[virt]
     attach: fn(index: usize),
