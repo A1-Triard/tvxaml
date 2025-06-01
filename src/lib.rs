@@ -2,5 +2,6 @@
 #![feature(macro_metavar_expr_concat)]
 #![feature(trusted_len)]
 
+pub mod template;
 pub mod view;
 pub mod panel;

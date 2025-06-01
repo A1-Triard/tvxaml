@@ -1,5 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
+use serde::{Serialize, Deserialize};
+use crate::template::Template;
 
 import! { pub panel:
     use [view crate::view];
@@ -57,5 +59,28 @@ impl Panel {
 
     pub fn children_impl(this: &Rc<dyn TPanel>) -> Rc<dyn TViewVec> {
         this.panel().children.clone()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PanelTemplate {
+    pub view: ViewTemplate,
+    pub children: Vec<Box<dyn Template>>,
+}
+
+#[typetag::serde]
+impl Template for PanelTemplate {
+    fn create_instance(&self) -> Rc<dyn TObj> {
+        let obj = Panel::new();
+        obj.init();
+        dyn_cast_rc(obj).unwrap()
+    }
+
+    fn apply(&self, instance: &Rc<dyn TObj>) {
+        self.view.apply(instance);
+        let obj: Rc<dyn TPanel> = dyn_cast_rc(instance.clone()).unwrap();
+        for child in &self.children {
+            obj.children().push(dyn_cast_rc(child.load_content()).unwrap());
+        }
     }
 }

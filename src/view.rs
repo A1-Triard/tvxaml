@@ -1,14 +1,29 @@
 use basic_oop::{class_unsafe, import, Vtable};
+use dynamic_cast::dyn_cast_rc;
+use serde::{Serialize, Deserialize};
 use std::iter::{FusedIterator, TrustedLen};
 use std::mem::replace;
 use std::num::NonZero;
 use std::rc::{self};
 use std::cell::{self, RefCell};
+use crate::template::Template;
 
 import! { pub view:
     use [obj basic_oop::obj];
     pub use std::rc::Rc;
     pub use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LayoutTemplate { }
+
+#[typetag::serde]
+impl Template for LayoutTemplate {
+    fn create_instance(&self) -> Rc<dyn TObj> {
+        dyn_cast_rc(Layout::new()).unwrap()
+    }
+
+    fn apply(&self, _instance: &Rc<dyn TObj>) { }
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -38,6 +53,35 @@ impl Layout {
 
     pub fn set_owner_impl(this: &Rc<dyn TLayout>, value: Option<&Rc<dyn TView>>) {
         this.layout().owner.replace(value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade));
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ViewTemplate {
+    pub layout: Box<dyn Template>,
+    pub min_size: Vector,
+    pub max_size: Vector,
+    pub h_align: Option<HAlign>,
+    pub v_align: Option<VAlign>,
+    pub margin: Thickness,
+}
+
+#[typetag::serde]
+impl Template for ViewTemplate {
+    fn create_instance(&self) -> Rc<dyn TObj> {
+        let obj = View::new();
+        obj.init();
+        dyn_cast_rc(obj).unwrap()
+    }
+
+    fn apply(&self, instance: &Rc<dyn TObj>) {
+        let obj: Rc<dyn TView> = dyn_cast_rc(instance.clone()).unwrap();
+        obj.set_layout(dyn_cast_rc(self.layout.load_content()).unwrap());
+        obj.set_min_size(self.min_size);
+        obj.set_max_size(self.max_size);
+        obj.set_h_align(self.h_align);
+        obj.set_v_align(self.v_align);
+        obj.set_margin(self.margin); 
     }
 }
 
