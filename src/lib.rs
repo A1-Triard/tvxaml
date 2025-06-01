@@ -152,6 +152,7 @@ impl View {
     pub fn invalidate_measure_impl(this: &Rc<dyn TView>) {
         this.view().data.borrow_mut().measure_size = None;
         this.invalidate_arrange();
+        this.parent().map(|x| x.invalidate_measure());
     }
 
     pub fn desired_size_impl(this: &Rc<dyn TView>) -> Vector {
@@ -221,14 +222,16 @@ pub struct ViewVec {
     __mod__: ::tvxaml,
     owner: RefCell<rc::Weak<dyn TView>>,
     items: RefCell<Vec<Rc<dyn TView>>>,
+    #[non_virt]
+    owner: fn() -> Option<Rc<dyn TView>>,
     #[virt]
     init: fn(owner: &Rc<dyn TView>),
     #[virt]
     attach: fn(index: usize),
     #[virt]
     detach: fn(index: usize),
-    #[non_virt]
-    as_vec: fn() -> cell::Ref<Vec<Rc<dyn TView>>>,
+    #[virt]
+    changed: fn(),
     #[non_virt]
     iter: fn() -> ViewVecIter,
     #[non_virt]
@@ -264,27 +267,33 @@ impl ViewVec {
         }
     }
 
+    pub fn owner_impl(this: &Rc<dyn TViewVec>) -> Option<Rc<dyn TView>> {
+        this.view_vec().owner.borrow().upgrade()
+    }
+
     pub fn init_impl(this: &Rc<dyn TViewVec>, owner: &Rc<dyn TView>) {
         this.view_vec().owner.replace(Rc::downgrade(owner));
     }
 
     pub fn attach_impl(this: &Rc<dyn TViewVec>, index: usize) {
         let owner = this.view_vec().owner.borrow().upgrade();
-        let vec = this.as_vec();
+        let vec = Self::as_vec(this);
         vec[index].set_parent(owner.as_ref());
     }
 
     pub fn detach_impl(this: &Rc<dyn TViewVec>, index: usize) {
-        let vec = this.as_vec();
+        let vec = Self::as_vec(this);
         vec[index].set_parent(None);
     }
 
-    pub fn as_vec_impl(this: &Rc<dyn TViewVec>) -> cell::Ref<Vec<Rc<dyn TView>>> {
+    pub fn changed_impl(_this: &Rc<dyn TViewVec>) { }
+
+    fn as_vec(this: &Rc<dyn TViewVec>) -> cell::Ref<Vec<Rc<dyn TView>>> {
         this.view_vec().items.borrow()
     }
 
     pub fn at_impl(this: &Rc<dyn TViewVec>, index: usize) -> Rc<dyn TView> {
-        let vec = this.as_vec();
+        let vec = Self::as_vec(this);
         vec[index].clone()
     }
 
@@ -292,12 +301,15 @@ impl ViewVec {
         let mut vec = this.view_vec().items.borrow_mut();
         vec.insert(index, element);
         this.attach(index);
+        this.changed();
     }
 
     pub fn remove_impl(this: &Rc<dyn TViewVec>, index: usize) -> Rc<dyn TView> {
         this.detach(index);
         let mut vec = this.view_vec().items.borrow_mut();
-        vec.remove(index)
+        let old = vec.remove(index);
+        this.changed();
+        old
     }
 
     pub fn push_impl(this: &Rc<dyn TViewVec>, value: Rc<dyn TView>) {
@@ -305,6 +317,7 @@ impl ViewVec {
         vec.push(value);
         let index = vec.len() - 1;
         this.attach(index);
+        this.changed();
     }
 
     pub fn pop_impl(this: &Rc<dyn TViewVec>) -> Option<Rc<dyn TView>> {
@@ -313,7 +326,9 @@ impl ViewVec {
         let index = len - 1;
         this.detach(index);
         let mut vec = this.view_vec().items.borrow_mut();
-        Some(vec.pop().unwrap())
+        let old = vec.pop().unwrap();
+        this.changed();
+        Some(old)
     }
 
     pub fn clear_impl(this: &Rc<dyn TViewVec>) {
@@ -323,15 +338,16 @@ impl ViewVec {
         }
         let mut vec = this.view_vec().items.borrow_mut();
         vec.clear();
+        this.changed();
     }
 
     pub fn len_impl(this: &Rc<dyn TViewVec>) -> usize {
-        let vec = this.as_vec();
+        let vec = Self::as_vec(this);
         vec.len()
     }
 
     pub fn is_empty_impl(this: &Rc<dyn TViewVec>) -> bool {
-        let vec = this.as_vec();
+        let vec = Self::as_vec(this);
         vec.is_empty()
     }
 
@@ -340,28 +356,29 @@ impl ViewVec {
         let mut vec = this.view_vec().items.borrow_mut();
         let old = replace(&mut vec[index], element);
         this.attach(index);
+        this.changed();
         old
     }
 
     pub fn iter_impl(this: &Rc<dyn TViewVec>) -> ViewVecIter {
-        let vec = this.as_vec();
-        let len = vec.len();
-        ViewVecIter { vec, index: 0, len }
+        let len = this.len();
+        ViewVecIter { vec: this.clone(), index: 0, len }
     }
 }
 
-pub struct ViewVecIter<'a> {
-    vec: cell::Ref<'a, Vec<Rc<dyn TView>>>,
+pub struct ViewVecIter {
+    vec: Rc<dyn TViewVec>,
     index: usize,
     len: usize,
 }
 
-impl<'a> Iterator for ViewVecIter<'a> {
+impl Iterator for ViewVecIter {
     type Item = Rc<dyn TView>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index == self.len { return None; }
-        let item = self.vec[self.index].clone();
+        let vec = ViewVec::as_vec(&self.vec);
+        let item = vec[self.index].clone();
         self.index += 1;
         Some(item)
     }
@@ -377,7 +394,8 @@ impl<'a> Iterator for ViewVecIter<'a> {
 
     fn last(self) -> Option<Self::Item> {
         if self.index == self.len { return None; }
-        Some(self.vec[self.len - 1].clone())
+        let vec = ViewVec::as_vec(&self.vec);
+        Some(vec[self.len - 1].clone())
     }
 
     fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
@@ -395,7 +413,8 @@ impl<'a> Iterator for ViewVecIter<'a> {
         let size = self.len - self.index;
         if n < size {
             self.index += n;
-            let item = self.vec[self.index].clone();
+            let vec = ViewVec::as_vec(&self.vec);
+            let item = vec[self.index].clone();
             self.index += 1;
             Some(item)
         } else {
@@ -404,11 +423,12 @@ impl<'a> Iterator for ViewVecIter<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for ViewVecIter<'a> {
+impl DoubleEndedIterator for ViewVecIter {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index == self.len { return None; }
         self.len -= 1;
-        Some(self.vec[self.len].clone())
+        let vec = ViewVec::as_vec(&self.vec);
+        Some(vec[self.len].clone())
     }
 
     fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
@@ -427,18 +447,43 @@ impl<'a> DoubleEndedIterator for ViewVecIter<'a> {
         if n < size {
             self.len -= n;
             self.len -= 1;
-            Some(self.vec[self.len].clone())
+            let vec = ViewVec::as_vec(&self.vec);
+            Some(vec[self.len].clone())
         } else {
             None
         }
     }
 }
 
-impl<'a> ExactSizeIterator for ViewVecIter<'a> { }
+impl ExactSizeIterator for ViewVecIter { }
 
-impl<'a> FusedIterator for ViewVecIter<'a> { }
+impl FusedIterator for ViewVecIter { }
 
-unsafe impl<'a> TrustedLen for ViewVecIter<'a> { }
+unsafe impl TrustedLen for ViewVecIter { }
+
+#[class_unsafe(inherited_from_ViewVec)]
+pub struct PanelChildrenVec {
+    __mod__: ::tvxaml,
+    #[over]
+    changed: (),
+}
+
+impl PanelChildrenVec {
+    pub fn new() -> Rc<dyn TPanelChildrenVec> {
+        Rc::new(unsafe { Self::new_raw(PANEL_CHILDREN_VEC_VTABLE.as_ptr()) })
+    }
+
+    pub unsafe fn new_raw(vtable: Vtable) -> Self {
+        PanelChildrenVec {
+            view_vec: unsafe { ViewVec::new_raw(vtable) },
+        }
+    }
+
+    pub fn changed_impl(this: &Rc<dyn TViewVec>) {
+        ViewVec::changed_impl(this);
+        this.owner().map(|x| x.invalidate_measure());
+    }
+}
 
 #[class_unsafe(inherited_from_View)]
 pub struct Panel {
