@@ -490,7 +490,7 @@ impl PanelChildrenVec {
 #[class_unsafe(inherited_from_View)]
 pub struct Panel {
     __mod__: ::tvxaml,
-    children: Rc<dyn TPanelChildrenVec>,
+    children: Rc<dyn TViewVec>,
     #[over]
     init: (),
     #[non_virt]
@@ -505,7 +505,7 @@ impl Panel {
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
         Panel {
             view: unsafe { View::new_raw(vtable) },
-            children: PanelChildrenVec::new()
+            children: dyn_cast_rc(PanelChildrenVec::new()).unwrap()
         }
     }
 
@@ -516,6 +516,6 @@ impl Panel {
     }
 
     pub fn children_impl(this: &Rc<dyn TPanel>) -> Rc<dyn TViewVec> {
-        dyn_cast_rc(this.panel().children.clone()).unwrap()
+        this.panel().children.clone()
     }
 }
