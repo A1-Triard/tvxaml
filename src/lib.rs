@@ -150,8 +150,9 @@ impl View {
     }
 
     pub fn invalidate_measure_impl(this: &Rc<dyn TView>) {
-        this.view().data.borrow_mut().measure_size = None;
-        this.invalidate_arrange();
+        let mut data = this.view().data.borrow_mut();
+        data.measure_size = None;
+        data.arrange_size = None;
         this.parent().map(|x| x.invalidate_measure());
     }
 
@@ -186,6 +187,7 @@ impl View {
 
     pub fn invalidate_arrange_impl(this: &Rc<dyn TView>) {
         this.view().data.borrow_mut().arrange_size = None;
+        this.parent().map(|x| x.invalidate_arrange());
     }
 
     pub fn render_rect_impl(this: &Rc<dyn TView>) -> Rect {
@@ -462,24 +464,24 @@ impl FusedIterator for ViewVecIter { }
 unsafe impl TrustedLen for ViewVecIter { }
 
 #[class_unsafe(inherited_from_ViewVec)]
-pub struct PanelChildrenVec {
+struct PanelChildrenVec {
     __mod__: ::tvxaml,
     #[over]
     changed: (),
 }
 
 impl PanelChildrenVec {
-    pub fn new() -> Rc<dyn TPanelChildrenVec> {
+    fn new() -> Rc<dyn TPanelChildrenVec> {
         Rc::new(unsafe { Self::new_raw(PANEL_CHILDREN_VEC_VTABLE.as_ptr()) })
     }
 
-    pub unsafe fn new_raw(vtable: Vtable) -> Self {
+    unsafe fn new_raw(vtable: Vtable) -> Self {
         PanelChildrenVec {
             view_vec: unsafe { ViewVec::new_raw(vtable) },
         }
     }
 
-    pub fn changed_impl(this: &Rc<dyn TViewVec>) {
+    fn changed_impl(this: &Rc<dyn TViewVec>) {
         ViewVec::changed_impl(this);
         this.owner().map(|x| x.invalidate_measure());
     }
@@ -488,11 +490,11 @@ impl PanelChildrenVec {
 #[class_unsafe(inherited_from_View)]
 pub struct Panel {
     __mod__: ::tvxaml,
-    children: Rc<dyn TViewVec>,
+    children: Rc<dyn TPanelChildrenVec>,
     #[over]
     init: (),
     #[non_virt]
-    children: fn() -> &Rc<dyn TViewVec>,
+    children: fn() -> Rc<dyn TViewVec>,
 }
 
 impl Panel {
@@ -503,7 +505,7 @@ impl Panel {
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
         Panel {
             view: unsafe { View::new_raw(vtable) },
-            children: ViewVec::new()
+            children: PanelChildrenVec::new()
         }
     }
 
@@ -513,7 +515,7 @@ impl Panel {
         panel.panel().children.init(this);
     }
 
-    pub fn children_impl(this: &Rc<dyn TPanel>) -> &Rc<dyn TViewVec> {
-        &this.panel().children
+    pub fn children_impl(this: &Rc<dyn TPanel>) -> Rc<dyn TViewVec> {
+        dyn_cast_rc(this.panel().children.clone()).unwrap()
     }
 }
