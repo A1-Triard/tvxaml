@@ -10,7 +10,39 @@ use std::num::NonZero;
 use std::rc::{self, Rc};
 use std::cell::{self, RefCell};
 
+#[class_unsafe(basic_oop::inherited_from_Obj)]
+pub struct Layout {
+    __mod__: ::tvxaml,
+    owner: RefCell<rc::Weak<dyn TView>>,
+    #[non_virt]
+    owner: fn() -> Option<Rc<dyn TView>>,
+    #[non_virt]
+    set_owner: fn(value: Option<&Rc<dyn TView>>),
+}
+
+impl Layout {
+    pub fn new() -> Rc<dyn TLayout> {
+        Rc::new(unsafe { Self::new_raw(LAYOUT_VTABLE.as_ptr()) })
+    }
+
+    pub unsafe fn new_raw(vtable: Vtable) -> Self {
+        Layout {
+            obj: unsafe { Obj::new_raw(vtable) },
+            owner: RefCell::new(<rc::Weak::<View>>::new()),
+        }
+    }
+
+    pub fn owner_impl(this: &Rc<dyn TLayout>) -> Option<Rc<dyn TView>> {
+        this.layout().owner.borrow().upgrade()
+    }
+
+    pub fn set_owner_impl(this: &Rc<dyn TLayout>, value: Option<&Rc<dyn TView>>) {
+        this.layout().owner.replace(value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade));
+    }
+}
+
 struct ViewData {
+    layout: Rc<dyn TLayout>,
     parent: rc::Weak<dyn TView>,
     measure_size: Option<(Option<i16>, Option<i16>)>,
     desired_size: Vector,
@@ -29,6 +61,10 @@ pub struct View {
     data: RefCell<ViewData>,
     #[virt]
     init: fn(),
+    #[non_virt]
+    layout: fn() -> Rc<dyn TLayout>,
+    #[non_virt]
+    set_layout: fn(value: Rc<dyn TLayout>),
     #[non_virt]
     parent: fn() -> Option<Rc<dyn TView>>,
     #[non_virt]
@@ -80,6 +116,7 @@ impl View {
         View {
             obj: unsafe { Obj::new_raw(vtable) },
             data: RefCell::new(ViewData {
+                layout: Layout::new(),
                 parent: <rc::Weak::<View>>::new(),
                 min_size: Vector::null(),
                 max_size: Vector { x: -1, y: -1 },
@@ -95,6 +132,19 @@ impl View {
     }
 
     pub fn init_impl(_this: &Rc<dyn TView>) { }
+
+    pub fn layout_impl(this: &Rc<dyn TView>) -> Rc<dyn TLayout> {
+        this.view().data.borrow().layout.clone()
+    }
+
+    pub fn set_layout_impl(this: &Rc<dyn TView>, value: Rc<dyn TLayout>) {
+        value.set_owner(Some(this));
+        let mut data = this.view().data.borrow_mut();
+        let old = replace(&mut data.layout, value);
+        let parent = data.parent.upgrade();
+        old.set_owner(None);
+        parent.map(|x| x.invalidate_measure());
+    }
 
     pub fn parent_impl(this: &Rc<dyn TView>) -> Option<Rc<dyn TView>> {
         this.view().data.borrow().parent.upgrade()
