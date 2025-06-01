@@ -11,7 +11,7 @@ import! { pub view:
     pub use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
 }
 
-#[class_unsafe(inherited_from_Obj)]
+#[class_unsafe(inherits_Obj)]
 pub struct Layout {
     owner: RefCell<rc::Weak<dyn TView>>,
     #[non_virt]
@@ -55,7 +55,7 @@ struct ViewData {
     margin: Thickness,
 }
 
-#[class_unsafe(inherited_from_Obj)]
+#[class_unsafe(inherits_Obj)]
 pub struct View {
     data: RefCell<ViewData>,
     #[virt]
@@ -268,7 +268,7 @@ impl View {
     }
 }
 
-#[class_unsafe(inherited_from_Obj)]
+#[class_unsafe(inherits_Obj)]
 pub struct ViewVec {
     owner: RefCell<rc::Weak<dyn TView>>,
     items: RefCell<Vec<Rc<dyn TView>>>,

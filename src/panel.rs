@@ -5,7 +5,7 @@ import! { pub panel:
     use [view crate::view];
 }
 
-#[class_unsafe(inherited_from_ViewVec)]
+#[class_unsafe(inherits_ViewVec)]
 struct PanelChildrenVec {
     #[over]
     changed: (),
@@ -28,7 +28,7 @@ impl PanelChildrenVec {
     }
 }
 
-#[class_unsafe(inherited_from_View)]
+#[class_unsafe(inherits_View)]
 pub struct Panel {
     children: Rc<dyn TViewVec>,
     #[over]
