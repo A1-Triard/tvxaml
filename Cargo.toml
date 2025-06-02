@@ -3,9 +3,15 @@ name = "tvxaml"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [
+    "screen-base",
+]
+
 [dependencies]
 basic-oop = "0.4.0"
 dynamic-cast = "0.1.6"
 int-vec-2d = { version = "0.1.5", features = ["serde"] }
 serde = { version = "1.0.219", default-features = false, features = ["alloc"] }
+tvxaml-screen-base = { version = "0.1.0", path = "screen-base" }
 typetag = "0.2.20"

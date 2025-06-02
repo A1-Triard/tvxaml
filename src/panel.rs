@@ -63,7 +63,9 @@ impl Panel {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename="Panel")]
 pub struct PanelTemplate {
+    #[serde(flatten)]
     pub view: ViewTemplate,
     pub children: Vec<Box<dyn Template>>,
 }

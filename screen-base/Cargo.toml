@@ -1,0 +1,22 @@
+[package]
+edition = "2021"
+name = "tvxaml-screen-base"
+version = "0.1.0"
+#rust-version = "nightly"
+authors = ["warlock <internalmike@gmail.com>"]
+description = "Text user interface framework. Basic platform-independent text screen interface."
+readme = "README.md"
+documentation = "https://docs.rs/tvxaml-screen-base/"
+keywords = ["tui", "ncurses", "notcurses", "screen"]
+categories = ["command-line-interface", "no-std"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/A1-Triard/tvxaml"
+
+[dependencies]
+enum-derive-2018 = { version = "3.0.2", default-features = false }
+int-vec-2d = "0.1.4"
+macro-attr-2018 = "3.0.1"
+unicode-width = "0.2.0"
+
+[badges]
+maintenance = { status = "experimental" }

@@ -15,6 +15,7 @@ import! { pub view:
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename="Layout")]
 pub struct LayoutTemplate { }
 
 #[typetag::serde]
@@ -57,6 +58,7 @@ impl Layout {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename="View")]
 pub struct ViewTemplate {
     pub layout: Box<dyn Template>,
     pub min_size: Vector,
