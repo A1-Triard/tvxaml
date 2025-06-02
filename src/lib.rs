@@ -3,6 +3,7 @@
 #![feature(trusted_len)]
 
 pub mod template;
+pub mod app;
 pub mod view;
 pub mod view_vec;
 pub mod panel;
