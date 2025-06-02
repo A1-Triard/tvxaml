@@ -3,8 +3,8 @@ use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use crate::template::Template;
 
-import! { pub panel:
-    use [view crate::view];
+import! { panel_children_vec:
+    use [view_vec crate::view_vec];
 }
 
 #[class_unsafe(inherits_ViewVec)]
@@ -28,6 +28,11 @@ impl PanelChildrenVec {
         ViewVec::changed_impl(this);
         this.owner().map(|x| x.invalidate_measure());
     }
+}
+
+import! { pub panel:
+    use [view crate::view];
+    use crate::view_vec::TViewVec;
 }
 
 #[class_unsafe(inherits_View)]

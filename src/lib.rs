@@ -4,5 +4,6 @@
 
 pub mod template;
 pub mod view;
+pub mod view_vec;
 pub mod panel;
 pub mod static_text;
