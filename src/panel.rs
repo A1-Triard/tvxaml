@@ -20,7 +20,7 @@ impl PanelChildrenVec {
 
     unsafe fn new_raw(vtable: Vtable) -> Self {
         PanelChildrenVec {
-            view_vec: unsafe { ViewVec::new_raw(vtable) },
+            view_vec: unsafe { ViewVec::new_raw(true, true, vtable) },
         }
     }
 

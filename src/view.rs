@@ -5,11 +5,13 @@ use std::mem::replace;
 use std::rc::{self};
 use std::cell::RefCell;
 use crate::template::Template;
+use crate::app::{App, AppExt};
 
 import! { pub view:
     use [obj basic_oop::obj];
     use std::rc::Rc;
     use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
+    use crate::app::TApp;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,16 +89,18 @@ impl Template for ViewTemplate {
 
 struct ViewData {
     layout: Rc<dyn TLayout>,
-    parent: rc::Weak<dyn TView>,
+    layout_parent: rc::Weak<dyn TView>,
+    visual_parent: rc::Weak<dyn TView>,
     measure_size: Option<(Option<i16>, Option<i16>)>,
     desired_size: Vector,
     arrange_size: Option<Vector>,
-    render_rect: Rect,
+    render_bounds: Rect,
     min_size: Vector,
     max_size: Vector,
     h_align: Option<HAlign>,
     v_align: Option<VAlign>,
     margin: Thickness,
+    app: rc::Weak<dyn TApp>,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -109,9 +113,13 @@ pub struct View {
     #[non_virt]
     set_layout: fn(value: Rc<dyn TLayout>),
     #[non_virt]
-    parent: fn() -> Option<Rc<dyn TView>>,
+    layout_parent: fn() -> Option<Rc<dyn TView>>,
     #[non_virt]
-    set_parent: fn(value: Option<&Rc<dyn TView>>),
+    set_layout_parent: fn(value: Option<&Rc<dyn TView>>),
+    #[non_virt]
+    visual_parent: fn() -> Option<Rc<dyn TView>>,
+    #[non_virt]
+    set_visual_parent: fn(value: Option<&Rc<dyn TView>>),
     #[non_virt]
     min_size: fn() -> Vector,
     #[non_virt]
@@ -135,7 +143,9 @@ pub struct View {
     #[non_virt]
     desired_size: fn() -> Vector,
     #[non_virt]
-    render_rect: fn() -> Rect,
+    render_bounds: fn() -> Rect,
+    #[non_virt]
+    inner_render_bounds: fn() -> Rect,
     #[non_virt]
     invalidate_measure: fn(),
     #[non_virt]
@@ -145,9 +155,15 @@ pub struct View {
     #[non_virt]
     invalidate_arrange: fn(),
     #[non_virt]
-    arrange: fn(rect: Rect),
+    arrange: fn(bounds: Rect),
     #[virt]
     arrange_override: fn(size: Vector) -> Vector,
+    #[non_virt]
+    app: fn() -> Option<Rc<dyn TApp>>,
+    #[non_virt]
+    set_app: fn(value: Option<&Rc<dyn TApp>>),
+    #[non_virt]
+    invalidate_render: fn(),
 }
 
 impl View {
@@ -160,7 +176,8 @@ impl View {
             obj: unsafe { Obj::new_raw(vtable) },
             data: RefCell::new(ViewData {
                 layout: Layout::new(),
-                parent: <rc::Weak::<View>>::new(),
+                layout_parent: <rc::Weak::<View>>::new(),
+                visual_parent: <rc::Weak::<View>>::new(),
                 min_size: Vector::null(),
                 max_size: Vector { x: -1, y: -1 },
                 h_align: None,
@@ -169,7 +186,8 @@ impl View {
                 measure_size: None,
                 desired_size: Vector::null(),
                 arrange_size: None,
-                render_rect: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
+                render_bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
+                app: <rc::Weak::<App>>::new(),
             })
         }
     }
@@ -184,17 +202,27 @@ impl View {
         value.set_owner(Some(this));
         let mut data = this.view().data.borrow_mut();
         let old = replace(&mut data.layout, value);
-        let parent = data.parent.upgrade();
+        let parent = data.layout_parent.upgrade();
         old.set_owner(None);
         parent.map(|x| x.invalidate_measure());
     }
 
-    pub fn parent_impl(this: &Rc<dyn TView>) -> Option<Rc<dyn TView>> {
-        this.view().data.borrow().parent.upgrade()
+    pub fn layout_parent_impl(this: &Rc<dyn TView>) -> Option<Rc<dyn TView>> {
+        this.view().data.borrow().layout_parent.upgrade()
     }
 
-    pub fn set_parent_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TView>>) {
-        this.view().data.borrow_mut().parent = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+    pub fn set_layout_parent_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TView>>) {
+        this.view().data.borrow_mut().layout_parent
+            = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+    }
+
+    pub fn visual_parent_impl(this: &Rc<dyn TView>) -> Option<Rc<dyn TView>> {
+        this.view().data.borrow().visual_parent.upgrade()
+    }
+
+    pub fn set_visual_parent_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TView>>) {
+        this.view().data.borrow_mut().visual_parent
+            = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
     }
 
     pub fn min_size_impl(this: &Rc<dyn TView>) -> Vector {
@@ -246,7 +274,7 @@ impl View {
         let mut data = this.view().data.borrow_mut();
         data.measure_size = None;
         data.arrange_size = None;
-        this.parent().map(|x| x.invalidate_measure());
+        this.layout_parent().map(|x| x.invalidate_measure());
     }
 
     pub fn desired_size_impl(this: &Rc<dyn TView>) -> Vector {
@@ -280,20 +308,27 @@ impl View {
 
     pub fn invalidate_arrange_impl(this: &Rc<dyn TView>) {
         this.view().data.borrow_mut().arrange_size = None;
-        this.parent().map(|x| x.invalidate_arrange());
+        this.layout_parent().map(|x| x.invalidate_arrange());
     }
 
-    pub fn render_rect_impl(this: &Rc<dyn TView>) -> Rect {
-        this.view().data.borrow().render_rect
+    pub fn render_bounds_impl(this: &Rc<dyn TView>) -> Rect {
+        this.view().data.borrow().render_bounds
     }
 
-    pub fn arrange_impl(this: &Rc<dyn TView>, rect: Rect) {
+    pub fn inner_render_bounds_impl(this: &Rc<dyn TView>) -> Rect {
+        Rect {
+            tl: Point { x: 0, y: 0 },
+            size: this.margin().shrink_rect(this.render_bounds()).size
+        }
+    }
+
+    pub fn arrange_impl(this: &Rc<dyn TView>, bounds: Rect) {
         let render_size = {
             let data = this.view().data.borrow();
-            if Some(rect.size) == data.arrange_size {
-                data.render_rect.size
+            if Some(bounds.size) == data.arrange_size {
+                data.render_bounds.size
             } else {
-                let a_size = data.margin.shrink_rect_size(rect.size).min(data.max_size).max(data.min_size);
+                let a_size = data.margin.shrink_rect_size(bounds.size).min(data.max_size).max(data.min_size);
                 let render_size = this.arrange_override(a_size);
                 let data = this.view().data.borrow();
                 data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size))
@@ -302,12 +337,34 @@ impl View {
         let mut this = this.view().data.borrow_mut();
         let h_align = this.h_align.unwrap_or(HAlign::Left);
         let v_align = this.v_align.unwrap_or(VAlign::Top);
-        let align = Thickness::align(render_size, rect.size, h_align, v_align);
-        this.arrange_size = Some(rect.size);
-        this.render_rect = align.shrink_rect(rect)
+        let align = Thickness::align(render_size, bounds.size, h_align, v_align);
+        this.arrange_size = Some(bounds.size);
+        this.render_bounds = align.shrink_rect(bounds)
     }
 
     pub fn arrange_override_impl(_this: &Rc<dyn TView>, _size: Vector) -> Vector {
         Vector::null()
+    }
+
+    pub fn app_impl(this: &Rc<dyn TView>) -> Option<Rc<dyn TApp>> {
+        this.view().data.borrow().app.upgrade()
+    }
+
+    pub fn set_app_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TApp>>) {
+        this.view().data.borrow_mut().app = value.map_or_else(|| <rc::Weak::<App>>::new(), Rc::downgrade);
+    }
+
+    fn invalidate_render_raw(this: &Rc<dyn TView>, rect: Rect) {
+        let offset = this.margin().shrink_rect(this.render_bounds()).tl;
+        let parent_rect = rect.absolute_with(offset);
+        if let Some(app) = this.app() {
+            app.invalidate_render(parent_rect);
+        } else if let Some(parent) = this.visual_parent() {
+            Self::invalidate_render_raw(&parent, parent_rect);
+        }
+    }
+
+    pub fn invalidate_render_impl(this: &Rc<dyn TView>) {
+        Self::invalidate_render_raw(this, this.inner_render_bounds());
     }
 }

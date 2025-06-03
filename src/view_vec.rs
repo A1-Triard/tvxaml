@@ -16,6 +16,8 @@ import! { pub view_vec:
 pub struct ViewVec {
     owner: RefCell<rc::Weak<dyn TView>>,
     items: RefCell<Vec<Rc<dyn TView>>>,
+    layout: bool,
+    visual: bool,
     #[non_virt]
     owner: fn() -> Option<Rc<dyn TView>>,
     #[virt]
@@ -49,15 +51,17 @@ pub struct ViewVec {
 }
 
 impl ViewVec {
-    pub fn new() -> Rc<dyn TViewVec> {
-        Rc::new(unsafe { Self::new_raw(VIEW_VEC_VTABLE.as_ptr()) })
+    pub fn new(layout: bool, visual: bool) -> Rc<dyn TViewVec> {
+        Rc::new(unsafe { Self::new_raw(layout, visual, VIEW_VEC_VTABLE.as_ptr()) })
     }
 
-    pub unsafe fn new_raw(vtable: Vtable) -> Self {
+    pub unsafe fn new_raw(layout: bool, visual: bool, vtable: Vtable) -> Self {
         ViewVec {
             obj: unsafe { Obj::new_raw(vtable) },
             owner: RefCell::new(<rc::Weak::<View>>::new()),
-            items: RefCell::new(Vec::new())
+            items: RefCell::new(Vec::new()),
+            layout,
+            visual,
         }
     }
 
@@ -72,12 +76,24 @@ impl ViewVec {
     pub fn attach_impl(this: &Rc<dyn TViewVec>, index: usize) {
         let owner = this.view_vec().owner.borrow().upgrade();
         let vec = Self::as_vec(this);
-        vec[index].set_parent(owner.as_ref());
+        let item = &vec[index];
+        if this.view_vec().layout {
+            item.set_layout_parent(owner.as_ref());
+        }
+        if this.view_vec().visual {
+            item.set_visual_parent(owner.as_ref());
+        }
     }
 
     pub fn detach_impl(this: &Rc<dyn TViewVec>, index: usize) {
         let vec = Self::as_vec(this);
-        vec[index].set_parent(None);
+        let item = &vec[index];
+        if this.view_vec().visual {
+            item.set_visual_parent(None);
+        }
+        if this.view_vec().layout {
+            item.set_layout_parent(None);
+        }
     }
 
     pub fn changed_impl(_this: &Rc<dyn TViewVec>) { }
