@@ -70,11 +70,11 @@ impl App {
             if let Some(exit_code) = this.app().exit_code.get() {
                 break Ok(exit_code);
             }
-            let mut screen = this.app().screen.borrow_mut();
-            let screen_size = screen.size();
+            let screen_size = this.app().screen.borrow().size();
             this.app().root.measure(Some(screen_size.x), Some(screen_size.y));
             this.app().root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
             let offset = this.app().root.margin().shrink_rect(this.app().root.render_bounds()).tl;
+            let mut screen = this.app().screen.borrow_mut();
             let mut rp = RenderPort {
                 screen: screen.as_mut(),
                 invalidated_rect: this.app().invalidated_rect.get(),

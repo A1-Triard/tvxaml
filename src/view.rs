@@ -211,9 +211,12 @@ impl View {
 
     pub fn set_layout_impl(this: &Rc<dyn TView>, value: Rc<dyn TLayout>) {
         value.set_owner(Some(this));
-        let mut data = this.view().data.borrow_mut();
-        let old = replace(&mut data.layout, value);
-        let parent = data.layout_parent.upgrade();
+        let (old, parent) = {
+            let mut data = this.view().data.borrow_mut();
+            let old = replace(&mut data.layout, value);
+            let parent = data.layout_parent.upgrade();
+            (old, parent)
+        };
         old.set_owner(None);
         parent.map(|x| x.invalidate_measure());
     }
@@ -298,9 +301,11 @@ impl View {
     }
 
     pub fn invalidate_measure_impl(this: &Rc<dyn TView>) {
-        let mut data = this.view().data.borrow_mut();
-        data.measure_size = None;
-        data.arrange_size = None;
+        {
+            let mut data = this.view().data.borrow_mut();
+            data.measure_size = None;
+            data.arrange_size = None;
+        }
         this.layout_parent().map(|x| x.invalidate_measure());
     }
 
@@ -374,9 +379,11 @@ impl View {
             render_bounds
         };
         this.invalidate_render();
-        let mut data = this.view().data.borrow_mut();
-        data.arrange_size = Some(bounds.size);
-        data.render_bounds = render_bounds;
+        {
+            let mut data = this.view().data.borrow_mut();
+            data.arrange_size = Some(bounds.size);
+            data.render_bounds = render_bounds;
+        }
         this.invalidate_render();
     }
 
