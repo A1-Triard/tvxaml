@@ -212,8 +212,16 @@ impl View {
     }
 
     pub fn set_layout_parent_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TView>>) {
-        this.view().data.borrow_mut().layout_parent
-            = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+        let set = value.is_some();
+        let layout_parent = &mut this.view().data.borrow_mut().layout_parent;
+        let old_parent = replace(
+            layout_parent,
+            value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade)
+        );
+        if set && old_parent.upgrade().is_some() {
+            *layout_parent = old_parent;
+            panic!("layout parent is already set");
+        }
     }
 
     pub fn visual_parent_impl(this: &Rc<dyn TView>) -> Option<Rc<dyn TView>> {
@@ -221,8 +229,16 @@ impl View {
     }
 
     pub fn set_visual_parent_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TView>>) {
-        this.view().data.borrow_mut().visual_parent
-            = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+        let set = value.is_some();
+        let visual_parent = &mut this.view().data.borrow_mut().visual_parent;
+        let old_parent = replace(
+            visual_parent,
+            value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade)
+        );
+        if set && old_parent.upgrade().is_some() {
+            *visual_parent = old_parent;
+            panic!("visual parent is already set");
+        }
     }
 
     pub fn min_size_impl(this: &Rc<dyn TView>) -> Vector {
@@ -362,7 +378,13 @@ impl View {
     }
 
     pub fn set_app_impl(this: &Rc<dyn TView>, value: Option<&Rc<dyn TApp>>) {
-        this.view().data.borrow_mut().app = value.map_or_else(|| <rc::Weak::<App>>::new(), Rc::downgrade);
+        let set = value.is_some();
+        let app = &mut this.view().data.borrow_mut().app;
+        let old_app = replace(app, value.map_or_else(|| <rc::Weak::<App>>::new(), Rc::downgrade));
+        if set && old_app.upgrade().is_some() {
+            *app = old_app;
+            panic!("app is already set");
+        }
     }
 
     fn invalidate_render_raw(this: &Rc<dyn TView>, rect: Rect) {
