@@ -72,12 +72,8 @@ impl App {
     }
 
     pub fn invalidate_render_impl(this: &Rc<dyn TApp>, rect: Rect) {
-        let union = this.app().invalidated_rect.get().union(rect);
         let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
-        let invalidated_rect = union.map_or(app_rect, |x| x.either(
-            |band| band.either(|h| app_rect.intersect_h_band(h), |v| app_rect.intersect_v_band(v)),
-            |x| app_rect.intersect(x)
-        ));
-        this.app().invalidated_rect.set(invalidated_rect);
+        let union = this.app().invalidated_rect.get().union_intersect(rect, app_rect);
+        this.app().invalidated_rect.set(union);
     }
 }
