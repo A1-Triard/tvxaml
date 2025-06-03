@@ -164,6 +164,10 @@ pub struct View {
     set_app: fn(value: Option<&Rc<dyn TApp>>),
     #[non_virt]
     invalidate_render: fn(),
+    #[non_virt]
+    add_visual_child: fn(child: &Rc<dyn TView>),
+    #[non_virt]
+    remove_visual_child: fn(child: &Rc<dyn TView>),
 }
 
 impl View {
@@ -399,5 +403,13 @@ impl View {
 
     pub fn invalidate_render_impl(this: &Rc<dyn TView>) {
         Self::invalidate_render_raw(this, this.inner_render_bounds());
+    }
+
+    pub fn add_visual_child_impl(_this: &Rc<dyn TView>, child: &Rc<dyn TView>) {
+        child.invalidate_render();
+    }
+
+    pub fn remove_visual_child_impl(_this: &Rc<dyn TView>, child: &Rc<dyn TView>) {
+        child.invalidate_render();
     }
 }

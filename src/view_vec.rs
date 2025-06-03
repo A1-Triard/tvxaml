@@ -82,6 +82,7 @@ impl ViewVec {
         }
         if this.view_vec().visual {
             item.set_visual_parent(owner.as_ref());
+            owner.map(|x| x.add_visual_child(item));
         }
     }
 
@@ -89,6 +90,8 @@ impl ViewVec {
         let vec = Self::as_vec(this);
         let item = &vec[index];
         if this.view_vec().visual {
+            let owner = this.view_vec().owner.borrow().upgrade();
+            owner.map(|x| x.remove_visual_child(item));
             item.set_visual_parent(None);
         }
         if this.view_vec().layout {
