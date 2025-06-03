@@ -22,7 +22,6 @@ use alloc::boxed::Box;
 use core::alloc::Allocator;
 use core::fmt::{self, Debug, Display, Formatter};
 use core::num::NonZeroU16;
-use core::ops::Range;
 use enum_derive_2018::{EnumDisplay, EnumFromStr, IterVariants};
 use macro_attr_2018::macro_attr;
 use unicode_width::UnicodeWidthChar;
@@ -209,9 +208,9 @@ pub trait Screen {
         fg: Fg,
         bg: Bg,
         text: &str,
-        hard: Range<i16>,
-        soft: Range<i16>,
-    ) -> Range<i16>;
+        hard: Range1d,
+        soft: Range1d,
+    ) -> Range1d;
 
     fn update(&mut self, cursor: Option<Point>, wait: bool) -> Result<Option<Event>, Error>;
 }

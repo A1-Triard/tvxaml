@@ -2,6 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use int_vec_2d::{Vector, Point};
 use std::cell::{Cell, RefCell};
 use tvxaml_screen_base::Screen;
+use crate::render_port::RenderPort;
 use crate::view::ViewExt;
 
 import! { pub app:
@@ -49,13 +50,39 @@ impl App {
         this.app().root.clone()
     }
 
+    fn render(view: &Rc<dyn TView>, rp: &mut RenderPort) {
+        if view.inner_render_bounds().offset(rp.offset).intersect(rp.invalidated_rect).is_empty() {
+            return;
+        }
+        view.render(rp);
+        let base_offset = rp.offset;
+        for i in 0 .. view.visual_children_count() {
+            let child = view.visual_child(i);
+            let offset = child.margin().shrink_rect(child.render_bounds()).tl;
+            rp.offset = base_offset + Vector { x: offset.x, y: offset.y };
+            Self::render(&child, rp);
+        }
+    }
+
     pub fn run_impl(this: &Rc<dyn TApp>) -> Result<u8, tvxaml_screen_base_Error> {
         this.root().set_app(Some(this));
         let res = loop {
             if let Some(exit_code) = this.app().exit_code.get() {
                 break Ok(exit_code);
             }
-            if let Err(e) = this.app().screen.borrow_mut().update(None, true) {
+            let mut screen = this.app().screen.borrow_mut();
+            let screen_size = screen.size();
+            this.app().root.measure(Some(screen_size.x), Some(screen_size.y));
+            this.app().root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
+            let offset = this.app().root.margin().shrink_rect(this.app().root.render_bounds()).tl;
+            let mut rp = RenderPort {
+                screen: screen.as_mut(),
+                invalidated_rect: this.app().invalidated_rect.get(),
+                offset: Vector { x: offset.x, y: offset.y },
+                cursor: None, // TODO
+            };
+            Self::render(&this.app().root, &mut rp);
+            if let Err(e) = screen.update(None, true) {
                 break Err(e);
             }
         };

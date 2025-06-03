@@ -12,6 +12,7 @@ import! { pub view:
     use std::rc::Rc;
     use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
     use crate::app::TApp;
+    use crate::render_port::RenderPort;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -172,6 +173,8 @@ pub struct View {
     visual_children_count: fn() -> usize,
     #[virt]
     visual_child: fn(index: usize) -> Rc<dyn TView>,
+    #[virt]
+    render: fn(rp: &mut RenderPort),
 }
 
 impl View {
@@ -421,7 +424,9 @@ impl View {
         0
     }
 
-    pub fn visual_child_impl(_index: usize) -> Rc<dyn TView> {
+    pub fn visual_child_impl(_this: &Rc<dyn TView>, _index: usize) -> Rc<dyn TView> {
         panic!("visual child index out of bounds")
     }
+
+    pub fn render_impl(_this: &Rc<dyn TView>, _rp: &mut RenderPort) { }
 }
