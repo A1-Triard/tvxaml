@@ -168,6 +168,10 @@ pub struct View {
     add_visual_child: fn(child: &Rc<dyn TView>),
     #[non_virt]
     remove_visual_child: fn(child: &Rc<dyn TView>),
+    #[virt]
+    visual_children_count: fn() -> usize,
+    #[virt]
+    visual_child: fn(index: usize) -> Rc<dyn TView>,
 }
 
 impl View {
@@ -411,5 +415,13 @@ impl View {
 
     pub fn remove_visual_child_impl(_this: &Rc<dyn TView>, child: &Rc<dyn TView>) {
         child.invalidate_render();
+    }
+
+    pub fn visual_children_count_impl(_this: &Rc<dyn TView>) -> usize {
+        0
+    }
+
+    pub fn visual_child_impl(_index: usize) -> Rc<dyn TView> {
+        panic!("visual child index out of bounds")
     }
 }

@@ -42,6 +42,10 @@ pub struct Panel {
     init: (),
     #[non_virt]
     children: fn() -> Rc<dyn TViewVec>,
+    #[over]
+    visual_children_count: (),
+    #[over]
+    visual_child: (),
 }
 
 impl Panel {
@@ -64,6 +68,16 @@ impl Panel {
 
     pub fn children_impl(this: &Rc<dyn TPanel>) -> Rc<dyn TViewVec> {
         this.panel().children.clone()
+    }
+
+    pub fn visual_children_count_impl(this: &Rc<dyn TView>) -> usize {
+        let this: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
+        this.panel().children.len()
+    }
+
+    pub fn visual_child_impl(this: &Rc<dyn TView>, index: usize) -> Rc<dyn TView> {
+        let this: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
+        this.panel().children.at(index)
     }
 }
 
