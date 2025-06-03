@@ -334,12 +334,23 @@ impl View {
                 data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size))
             }
         };
-        let mut this = this.view().data.borrow_mut();
-        let h_align = this.h_align.unwrap_or(HAlign::Left);
-        let v_align = this.v_align.unwrap_or(VAlign::Top);
-        let align = Thickness::align(render_size, bounds.size, h_align, v_align);
-        this.arrange_size = Some(bounds.size);
-        this.render_bounds = align.shrink_rect(bounds)
+        let render_bounds = {
+            let mut data = this.view().data.borrow_mut();
+            let h_align = data.h_align.unwrap_or(HAlign::Left);
+            let v_align = data.v_align.unwrap_or(VAlign::Top);
+            let align = Thickness::align(render_size, bounds.size, h_align, v_align);
+            let render_bounds = align.shrink_rect(bounds);
+            if render_bounds == data.render_bounds {
+                data.arrange_size = Some(bounds.size);
+                return;
+            }
+            render_bounds
+        };
+        this.invalidate_render();
+        let mut data = this.view().data.borrow_mut();
+        data.arrange_size = Some(bounds.size);
+        data.render_bounds = render_bounds;
+        this.invalidate_render();
     }
 
     pub fn arrange_override_impl(_this: &Rc<dyn TView>, _size: Vector) -> Vector {

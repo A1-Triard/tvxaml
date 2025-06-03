@@ -1,10 +1,12 @@
 use basic_oop::{class_unsafe, import, Vtable};
-use int_vec_2d::{Rect, Vector, Point};
+use int_vec_2d::{Vector, Point};
 use std::cell::{Cell, RefCell};
 use tvxaml_screen_base::Screen;
+use crate::view::ViewExt;
 
 import! { pub app:
     use [obj basic_oop::obj];
+    use int_vec_2d::Rect;
     use std::rc::Rc;
     use tvxaml_screen_base::Error as tvxaml_screen_base_Error;
     use crate::view::TView;
@@ -48,14 +50,17 @@ impl App {
     }
 
     pub fn run_impl(this: &Rc<dyn TApp>) -> Result<u8, tvxaml_screen_base_Error> {
-        loop {
+        this.root().set_app(Some(this));
+        let res = loop {
             if let Some(exit_code) = this.app().exit_code.get() {
                 break Ok(exit_code);
             }
             if let Err(e) = this.app().screen.borrow_mut().update(None, true) {
                 break Err(e);
             }
-        }
+        };
+        this.root().set_app(None);
+        res
     }
 
     pub fn exit_impl(this: &Rc<dyn TApp>, exit_code: u8) {
