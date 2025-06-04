@@ -4,8 +4,9 @@ use tvxaml_screen_base::{Screen, Fg, Bg, text_width};
 
 pub struct RenderPort<'a> {
     pub(crate) screen: &'a mut dyn Screen,
-    pub(crate) invalidated_rect: Rect,
+    pub(crate) bounds: Rect,
     pub(crate) offset: Vector,
+    pub(crate) invalidated_rect: Rect,
     pub(crate) cursor: Option<Point>,
 }
 
@@ -13,11 +14,16 @@ impl<'a> RenderPort<'a> {
     pub fn text(&mut self, p: Point, color: (Fg, Bg), text: &str) {
         let screen_size = self.screen.size();
         let p = p.offset(self.offset);
+        if !self.bounds.v_range().contains(p.y) || self.bounds.size.x == 0 { return; }
         if !self.invalidated_rect.v_range().contains(p.y) || self.invalidated_rect.size.x == 0 { return; }
         if p.y < 0 || p.y >= screen_size.y { return; }
-        if p.x >= self.invalidated_rect.r() { return; }
+        if p.x >= self.bounds.r() || p.x >= self.invalidated_rect.r() { return; } // don't screen do same check?
         let rendered = self.screen.out(
-            p, color.0, color.1, text, self.invalidated_rect.h_range(), self.invalidated_rect.h_range()
+            p, color.0, color.1, text, self.bounds.h_range(), self.invalidated_rect.h_range()
+        );
+        self.invalidated_rect = self.invalidated_rect.union_intersect(
+            Rect::from_h_v_ranges(rendered, Range1d { start: p.y, end: p.y.wrapping_add(1) }),
+            Rect { tl: Point { x: 0, y: 0 }, size: screen_size }
         );
         if let Some(cursor) = self.cursor {
             if p.y == cursor.y && rendered.contains(cursor.x) {
@@ -27,14 +33,19 @@ impl<'a> RenderPort<'a> {
     }
 
     pub fn cursor(&mut self, p: Point) {
+        let screen_size = self.screen.size();
         let p = p.offset(self.offset);
         if p.y < 0 || p.y >= self.screen.size().y { return; }
-        if !self.invalidated_rect.contains(p) { return; }
+        if !self.bounds.contains(p) { return; }
         self.cursor = Some(p);
+        self.invalidated_rect = self.invalidated_rect.union_intersect(
+            Rect { tl: p, size: Vector { x: 1, y: 1 } },
+            Rect { tl: Point { x: 0, y: 0 }, size: screen_size }
+        );
     }
 
     pub fn fill(&mut self, mut f: impl FnMut(&mut Self, Point)) {
-        for p in self.invalidated_rect.points() {
+        for p in self.bounds.intersect(self.invalidated_rect).points() {
             f(self, p.offset(-self.offset));
         }
     }

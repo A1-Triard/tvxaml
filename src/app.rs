@@ -16,6 +16,7 @@ import! { pub app:
 #[class_unsafe(inherits_Obj)]
 pub struct App {
     screen: RefCell<Box<dyn Screen>>,
+    cursor: Cell<Option<Point>>,
     exit_code: Cell<Option<u8>>,
     root: Rc<dyn TView>,
     invalidated_rect: Cell<Rect>,
@@ -40,6 +41,7 @@ impl App {
         App {
             obj: unsafe { Obj::new_raw(vtable) },
             screen: RefCell::new(screen),
+            cursor: Cell::new(None),
             exit_code: Cell::new(None),
             root,
             invalidated_rect: Cell::new(Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() }),
@@ -51,15 +53,16 @@ impl App {
     }
 
     fn render(view: &Rc<dyn TView>, rp: &mut RenderPort) {
-        if view.inner_render_bounds().offset(rp.offset).intersect(rp.invalidated_rect).is_empty() {
+        if rp.invalidated_rect.intersect(rp.bounds).is_empty() {
             return;
         }
         view.render(rp);
         let base_offset = rp.offset;
         for i in 0 .. view.visual_children_count() {
             let child = view.visual_child(i);
-            let offset = child.margin().shrink_rect(child.render_bounds()).tl;
-            rp.offset = base_offset + Vector { x: offset.x, y: offset.y };
+            let bounds = child.margin().shrink_rect(child.render_bounds()).offset(base_offset);
+            rp.bounds = bounds;
+            rp.offset = Vector { x: bounds.l(), y: bounds.t() };
             Self::render(&child, rp);
         }
     }
@@ -73,16 +76,19 @@ impl App {
             let screen_size = this.app().screen.borrow().size();
             this.app().root.measure(Some(screen_size.x), Some(screen_size.y));
             this.app().root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
-            let offset = this.app().root.margin().shrink_rect(this.app().root.render_bounds()).tl;
+            let bounds = this.app().root.margin().shrink_rect(this.app().root.render_bounds());
             let mut screen = this.app().screen.borrow_mut();
             let mut rp = RenderPort {
                 screen: screen.as_mut(),
                 invalidated_rect: this.app().invalidated_rect.get(),
-                offset: Vector { x: offset.x, y: offset.y },
-                cursor: None, // TODO
+                bounds,
+                offset: Vector { x: bounds.l(), y: bounds.t() },
+                cursor: this.app().cursor.get(),
             };
             Self::render(&this.app().root, &mut rp);
-            if let Err(e) = screen.update(None, true) {
+            let cursor = rp.cursor;
+            this.app().cursor.set(cursor);
+            if let Err(e) = screen.update(cursor, true) {
                 break Err(e);
             }
         };
