@@ -82,7 +82,7 @@ impl App {
             let mut rp = RenderPort {
                 screen: screen.as_mut(),
                 invalidated_rect: this.app().invalidated_rect.get(),
-                bounds,
+                bounds: bounds.intersect(Rect { tl: Point { x: 0, y: 0 }, size: screen_size }),
                 offset: Vector { x: bounds.l(), y: bounds.t() },
                 cursor: this.app().cursor.get(),
             };
