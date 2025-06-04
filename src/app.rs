@@ -58,10 +58,11 @@ impl App {
         }
         view.render(rp);
         let base_offset = rp.offset;
+        let base_bounds = rp.bounds;
         for i in 0 .. view.visual_children_count() {
             let child = view.visual_child(i);
             let bounds = child.margin().shrink_rect(child.render_bounds()).offset(base_offset);
-            rp.bounds = bounds;
+            rp.bounds = bounds.intersect(base_bounds);
             rp.offset = Vector { x: bounds.l(), y: bounds.t() };
             Self::render(&child, rp);
         }
