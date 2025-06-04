@@ -14,8 +14,8 @@ impl<'a> RenderPort<'a> {
     pub fn text(&mut self, p: Point, color: (Fg, Bg), text: &str) {
         let screen_size = self.screen.size();
         let p = p.offset(self.offset);
-        if !self.bounds.v_range().contains(p.y) || self.bounds.size.x == 0 { return; }
-        if !self.invalidated_rect.v_range().contains(p.y) || self.invalidated_rect.size.x == 0 { return; }
+        if !self.bounds.v_range().contains(p.y) { return; }
+        if !self.invalidated_rect.v_range().contains(p.y) { return; }
         if p.y < 0 || p.y >= screen_size.y { return; }
         if p.x >= self.bounds.r() || p.x >= self.invalidated_rect.r() { return; } // don't screen do same check?
         let rendered = self.screen.out(
@@ -36,7 +36,7 @@ impl<'a> RenderPort<'a> {
         let screen_size = self.screen.size();
         let p = p.offset(self.offset);
         if p.y < 0 || p.y >= self.screen.size().y { return; }
-        if !self.bounds.contains(p) { return; }
+        if !self.bounds.contains(p) || !self.invalidated_rect.contains(p) { return; }
         self.cursor = Some(p);
         self.invalidated_rect = self.invalidated_rect.union_intersect(
             Rect { tl: p, size: Vector { x: 1, y: 1 } },
