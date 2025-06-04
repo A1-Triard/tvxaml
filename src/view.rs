@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
+use std::cmp::min;
 use std::mem::replace;
 use std::rc::{self};
 use std::cell::RefCell;
@@ -96,6 +97,7 @@ struct ViewData {
     desired_size: Vector,
     arrange_size: Option<Vector>,
     render_bounds: Rect,
+    real_render_bounds: Rect,
     min_size: Vector,
     max_size: Vector,
     h_align: Option<HAlign>,
@@ -198,6 +200,7 @@ impl View {
                 desired_size: Vector::null(),
                 arrange_size: None,
                 render_bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
+                real_render_bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
                 app: <rc::Weak::<App>>::new(),
             })
         }
@@ -329,6 +332,10 @@ impl View {
             let mut this = this.view().data.borrow_mut();
             let desired_size = desired_size.min(this.max_size).max(this.min_size);
             let desired_size = this.margin.expand_rect_size(desired_size);
+            let desired_size = Vector {
+                x: w.map_or(desired_size.x, |w| min(w as u16, desired_size.x as u16) as i16),
+                y: h.map_or(desired_size.y, |h| min(h as u16, desired_size.y as u16) as i16),
+            };
             this.measure_size = Some((w, h));
             this.desired_size = desired_size;
         }
@@ -350,7 +357,7 @@ impl View {
     pub fn inner_render_bounds_impl(this: &Rc<dyn TView>) -> Rect {
         Rect {
             tl: Point { x: 0, y: 0 },
-            size: this.margin().shrink_rect(this.render_bounds()).size
+            size: this.view().data.borrow().real_render_bounds.size
         }
     }
 
@@ -363,26 +370,29 @@ impl View {
                 let a_size = data.margin.shrink_rect_size(bounds.size).min(data.max_size).max(data.min_size);
                 let render_size = this.arrange_override(a_size);
                 let data = this.view().data.borrow();
-                data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size))
+                data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size)).min(bounds.size)
             }
         };
-        let render_bounds = {
+        let (render_bounds, real_render_bounds) = {
             let mut data = this.view().data.borrow_mut();
             let h_align = data.h_align.unwrap_or(HAlign::Left);
             let v_align = data.v_align.unwrap_or(VAlign::Top);
             let align = Thickness::align(render_size, bounds.size, h_align, v_align);
             let render_bounds = align.shrink_rect(bounds);
-            if render_bounds == data.render_bounds {
+            let real_render_bounds = data.margin.shrink_rect(render_bounds);
+            if real_render_bounds == data.real_render_bounds {
                 data.arrange_size = Some(bounds.size);
+                data.render_bounds = render_bounds;
                 return;
             }
-            render_bounds
+            (render_bounds, real_render_bounds)
         };
         this.invalidate_render();
         {
             let mut data = this.view().data.borrow_mut();
             data.arrange_size = Some(bounds.size);
             data.render_bounds = render_bounds;
+            data.real_render_bounds = real_render_bounds;
         }
         this.invalidate_render();
     }
@@ -406,7 +416,7 @@ impl View {
     }
 
     fn invalidate_render_raw(this: &Rc<dyn TView>, rect: Rect) {
-        let offset = this.margin().shrink_rect(this.render_bounds()).tl;
+        let offset = this.view().data.borrow().real_render_bounds.tl;
         let parent_rect = rect.absolute_with(offset);
         if let Some(app) = this.app() {
             app.invalidate_render(parent_rect);

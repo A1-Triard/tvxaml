@@ -10,10 +10,17 @@ import! { pub static_text:
     use [view crate::view];
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum TextWrapping {
+    NoWrap,
+    Wrap,
+    WrapWithOverflow,
+}
+
 struct StaticTextData {
     text: Rc<String>,
-    text_size: Vector,
     text_align: Option<HAlign>,
+    text_wrapping: TextWrapping,
 }
 
 #[class_unsafe(inherits_View)]
@@ -27,6 +34,10 @@ pub struct StaticText {
     text_align: fn() -> Option<HAlign>,
     #[non_virt]
     set_text_align: fn(value: Option<HAlign>),
+    #[non_virt]
+    text_wrapping: fn() -> TextWrapping,
+    #[non_virt]
+    set_text_wrapping: fn(value: TextWrapping),
     #[over]
     measure_override: (),
     #[over]
@@ -56,17 +67,7 @@ impl StaticText {
     }
 
     pub fn set_text_impl(this: &Rc<dyn TStaticText>, value: Rc<String>) {
-        {
-            let mut data = this.static_text().data.borrow_mut();
-            data.text = value;
-            let mut width = 0u16;
-            let mut height = 0u16;
-            for line in data.text.split('\n') {
-                width = max(width, text_width(line) as u16);
-                height = height.wrapping_add(1);
-            }
-            data.text_size = Vector { x: width as i16, y: height as i16 };
-        }
+        this.static_text().data.borrow_mut().text = value;
         this.invalidate_measure();
         this.invalidate_render();
     }
@@ -80,9 +81,20 @@ impl StaticText {
         this.invalidate_render();
     }
 
+    pub fn text_wrapping_impl(this: &Rc<dyn TStaticText>) -> TextWrapping {
+        this.static_text().data.borrow().text_wrapping
+    }
+
+    pub fn set_text_wrapping_impl(this: &Rc<dyn TStaticText>, value: TextWrapping) {
+        this.static_text().data.borrow_mut().text_wrapping = value;
+        this.invalidate_measure();
+        this.invalidate_render();
+    }
+
     pub fn measure_override_impl(this: &Rc<dyn TView>, _w: Option<i16>, _h: Option<i16>) -> Vector {
         let this: Rc<dyn TStaticText> = dyn_cast_rc(this.clone()).unwrap();
-        this.static_text().data.borrow().text_size
+        let data = this.static_text().data.borrow();
+
     }
 
     pub fn arrange_override_impl(this: &Rc<dyn TView>, size: Vector) -> Vector {
