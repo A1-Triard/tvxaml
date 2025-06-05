@@ -349,8 +349,8 @@ impl StaticText {
         ).size
     }
 
-    pub fn arrange_override_impl(_this: &Rc<dyn TView>, size: Vector) -> Vector {
-        size
+    pub fn arrange_override_impl(_this: &Rc<dyn TView>, bounds: Rect) -> Vector {
+        bounds.size
     }
 
     pub fn render_impl(this: &Rc<dyn TView>, rp: &mut RenderPort) {

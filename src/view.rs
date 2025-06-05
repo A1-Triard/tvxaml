@@ -160,7 +160,7 @@ pub struct View {
     #[non_virt]
     arrange: fn(bounds: Rect),
     #[virt]
-    arrange_override: fn(size: Vector) -> Vector,
+    arrange_override: fn(bounds: Rect) -> Vector,
     #[non_virt]
     app: fn() -> Option<Rc<dyn TApp>>,
     #[non_virt]
@@ -368,7 +368,7 @@ impl View {
                 data.render_bounds.size
             } else {
                 let a_size = data.margin.shrink_rect_size(bounds.size).min(data.max_size).max(data.min_size);
-                let render_size = this.arrange_override(a_size);
+                let render_size = this.arrange_override(Rect { tl: Point { x: 0, y: 0 }, size: a_size });
                 let data = this.view().data.borrow();
                 data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size)).min(bounds.size)
             }
@@ -397,7 +397,7 @@ impl View {
         this.invalidate_render();
     }
 
-    pub fn arrange_override_impl(_this: &Rc<dyn TView>, _size: Vector) -> Vector {
+    pub fn arrange_override_impl(_this: &Rc<dyn TView>, _bounds: Rect) -> Vector {
         Vector::null()
     }
 
