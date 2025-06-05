@@ -12,4 +12,5 @@ pub mod panel;
 pub mod decorator;
 pub mod stack_panel;
 pub mod canvas;
+pub mod dock_panel;
 pub mod static_text;
