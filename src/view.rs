@@ -8,12 +8,9 @@ use std::cell::RefCell;
 use crate::template::Template;
 use crate::app::{App, AppExt};
 
-import! { pub view:
+import! { pub layout:
     use [obj basic_oop::obj];
     use std::rc::Rc;
-    use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
-    use crate::app::IsApp;
-    use crate::render_port::RenderPort;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,6 +54,14 @@ impl Layout {
     pub fn set_owner_impl(this: &Rc<dyn IsLayout>, value: Option<&Rc<dyn IsView>>) {
         this.layout().owner.replace(value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade));
     }
+}
+
+import! { pub view:
+    use [obj basic_oop::obj];
+    use std::rc::Rc;
+    use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
+    use crate::app::IsApp;
+    use crate::render_port::RenderPort;
 }
 
 #[derive(Serialize, Deserialize)]

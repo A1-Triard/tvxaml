@@ -11,4 +11,5 @@ pub mod view_vec;
 pub mod panel;
 pub mod decorator;
 pub mod stack_panel;
+pub mod canvas;
 pub mod static_text;
