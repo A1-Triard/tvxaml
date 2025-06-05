@@ -91,6 +91,14 @@ pub struct PanelTemplate {
 
 #[typetag::serde]
 impl Template for PanelTemplate {
+    fn is_name_scope(&self) -> bool {
+        self.view.is_name_scope
+    }
+
+    fn name(&self) -> Option<&String> {
+        Some(&self.view.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = Panel::new();
         obj.init();

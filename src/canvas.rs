@@ -115,6 +115,14 @@ pub struct CanvasTemplate {
 
 #[typetag::serde]
 impl Template for CanvasTemplate {
+    fn is_name_scope(&self) -> bool {
+        self.panel.view.is_name_scope
+    }
+
+    fn name(&self) -> Option<&String> {
+        Some(&self.panel.view.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = Canvas::new();
         obj.init();

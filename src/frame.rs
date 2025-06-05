@@ -173,6 +173,14 @@ pub struct FrameTemplate {
 
 #[typetag::serde]
 impl Template for FrameTemplate {
+    fn is_name_scope(&self) -> bool {
+        self.decorator.view.is_name_scope
+    }
+
+    fn name(&self) -> Option<&String> {
+        Some(&self.decorator.view.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = Frame::new();
         obj.init();
