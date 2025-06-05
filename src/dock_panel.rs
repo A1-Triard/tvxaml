@@ -1,6 +1,6 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::cell::Cell;
 use crate::template::{Template, Names};
 use crate::view_vec::ViewVecExt;
@@ -45,15 +45,48 @@ impl DockLayout {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[derive(Serialize, Deserialize)]
+#[serde(rename="Dock")]
+enum DockSurrogate { Left, Top, Right, Bottom, Dock }
+
+fn serialize_dock<S>(value: &Option<Option<Dock>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    let surrogate = match value {
+        Some(Some(Dock::Left)) => Some(DockSurrogate::Left),
+        Some(Some(Dock::Top)) => Some(DockSurrogate::Top),
+        Some(Some(Dock::Right)) => Some(DockSurrogate::Right),
+        Some(Some(Dock::Bottom)) => Some(DockSurrogate::Bottom),
+        Some(None) => Some(DockSurrogate::Dock),
+        None => None,
+    };
+    surrogate.serialize(s)
+}
+
+fn deserialize_dock<'de, D>(d: D) -> Result<Option<Option<Dock>>, D::Error> where D: Deserializer<'de> {
+    let surrogate: Option<DockSurrogate> = Deserialize::deserialize(d)?;
+    Ok(match surrogate {
+        Some(DockSurrogate::Left) => Some(Some(Dock::Left)),
+        Some(DockSurrogate::Top) => Some(Some(Dock::Top)),
+        Some(DockSurrogate::Right) => Some(Some(Dock::Right)),
+        Some(DockSurrogate::Bottom) => Some(Some(Dock::Bottom)),
+        Some(DockSurrogate::Dock) => Some(None),
+        None => None,
+    })
+}
+
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="DockLayout")]
 pub struct DockLayoutTemplate {
     #[serde(flatten)]
     pub layout: LayoutTemplate,
-    pub dock: Option<Dock>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(serialize_with="serialize_dock")]
+    #[serde(deserialize_with="deserialize_dock")]
+    pub dock: Option<Option<Dock>>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="DockLayout")]
 impl Template for DockLayoutTemplate {
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = DockLayout::new();
@@ -63,7 +96,7 @@ impl Template for DockLayoutTemplate {
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         self.layout.apply(instance, names);
         let obj: Rc<dyn IsDockLayout> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_dock(self.dock);
+        self.dock.map(|x| obj.set_dock(x));
     }
 }
 
@@ -225,14 +258,14 @@ impl DockPanel {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="DockPanel")]
 pub struct DockPanelTemplate {
     #[serde(flatten)]
     pub panel: PanelTemplate,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="DockPanel")]
 impl Template for DockPanelTemplate {
     fn is_name_scope(&self) -> bool {
         self.panel.view.is_name_scope

@@ -1,6 +1,6 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::cmp::min;
 use std::mem::replace;
 use std::rc::{self};
@@ -14,11 +14,11 @@ import! { pub layout:
     use std::rc::Rc;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="Layout")]
 pub struct LayoutTemplate { }
 
-#[typetag::serde]
+#[typetag::serde(name="Layout")]
 impl Template for LayoutTemplate {
     fn create_instance(&self) -> Rc<dyn IsObj> {
         dyn_cast_rc(Layout::new()).unwrap()
@@ -66,22 +66,104 @@ import! { pub view:
     use crate::render_port::RenderPort;
 }
 
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[derive(Serialize, Deserialize)]
+#[serde(rename="HAlign")]
+enum HAlignSurrogate { Left, Center, Right, Stretch }
+
+fn serialize_h_align<S>(value: &Option<Option<HAlign>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    let surrogate = match value {
+        Some(Some(HAlign::Left)) => Some(HAlignSurrogate::Left),
+        Some(Some(HAlign::Center)) => Some(HAlignSurrogate::Center),
+        Some(Some(HAlign::Right)) => Some(HAlignSurrogate::Right),
+        Some(None) => Some(HAlignSurrogate::Stretch),
+        None => None,
+    };
+    surrogate.serialize(s)
+}
+
+fn deserialize_h_align<'de, D>(d: D) -> Result<Option<Option<HAlign>>, D::Error> where D: Deserializer<'de> {
+    let surrogate: Option<HAlignSurrogate> = Deserialize::deserialize(d)?;
+    Ok(match surrogate {
+        Some(HAlignSurrogate::Left) => Some(Some(HAlign::Left)),
+        Some(HAlignSurrogate::Center) => Some(Some(HAlign::Center)),
+        Some(HAlignSurrogate::Right) => Some(Some(HAlign::Right)),
+        Some(HAlignSurrogate::Stretch) => Some(None),
+        None => None,
+    })
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize)]
+#[serde(rename="VAlign")]
+enum VAlignSurrogate { Top, Center, Bottom, Stretch }
+
+fn serialize_v_align<S>(value: &Option<Option<VAlign>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    let surrogate = match value {
+        Some(Some(VAlign::Top)) => Some(VAlignSurrogate::Top),
+        Some(Some(VAlign::Center)) => Some(VAlignSurrogate::Center),
+        Some(Some(VAlign::Bottom)) => Some(VAlignSurrogate::Bottom),
+        Some(None) => Some(VAlignSurrogate::Stretch),
+        None => None,
+    };
+    surrogate.serialize(s)
+}
+
+fn deserialize_v_align<'de, D>(d: D) -> Result<Option<Option<VAlign>>, D::Error> where D: Deserializer<'de> {
+    let surrogate: Option<VAlignSurrogate> = Deserialize::deserialize(d)?;
+    Ok(match surrogate {
+        Some(VAlignSurrogate::Top) => Some(Some(VAlign::Top)),
+        Some(VAlignSurrogate::Center) => Some(Some(VAlign::Center)),
+        Some(VAlignSurrogate::Bottom) => Some(Some(VAlign::Bottom)),
+        Some(VAlignSurrogate::Stretch) => Some(None),
+        None => None,
+    })
+}
+
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="View")]
 pub struct ViewTemplate {
+    #[serde(default)]
+    #[serde(skip_serializing_if="is_false")]
     pub is_name_scope: bool,
+    #[serde(default)]
+    #[serde(skip_serializing_if="String::is_empty")]
     pub name: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Vec::is_empty")]
     pub resources: Vec<Box<dyn Template>>,
-    pub layout: Box<dyn Template>,
-    pub min_size: Vector,
-    pub max_size: Vector,
-    pub h_align: Option<HAlign>,
-    pub v_align: Option<VAlign>,
-    pub margin: Thickness,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub layout: Option<Box<dyn Template>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub min_size: Option<Vector>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub max_size: Option<Vector>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(serialize_with="serialize_h_align")]
+    #[serde(deserialize_with="deserialize_h_align")]
+    pub h_align: Option<Option<HAlign>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(serialize_with="serialize_v_align")]
+    #[serde(deserialize_with="deserialize_v_align")]
+    pub v_align: Option<Option<VAlign>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub margin: Option<Thickness>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="String::is_empty")]
     pub focus_tab: String,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="View")]
 impl Template for ViewTemplate {
     fn is_name_scope(&self) -> bool {
         self.is_name_scope
@@ -102,12 +184,12 @@ impl Template for ViewTemplate {
         for resource in &self.resources {
             obj.resources().insert(resource.load_content(names));
         }
-        obj.set_layout(dyn_cast_rc(self.layout.load_content(names)).unwrap());
-        obj.set_min_size(self.min_size);
-        obj.set_max_size(self.max_size);
-        obj.set_h_align(self.h_align);
-        obj.set_v_align(self.v_align);
-        obj.set_margin(self.margin); 
+        self.layout.as_ref().map(|x| obj.set_layout(dyn_cast_rc(x.load_content(names)).unwrap()));
+        self.min_size.map(|x| obj.set_min_size(x));
+        self.max_size.map(|x| obj.set_max_size(x));
+        self.h_align.map(|x| obj.set_h_align(x));
+        self.v_align.map(|x| obj.set_v_align(x));
+        self.margin.map(|x| obj.set_margin(x)); 
         {
             let obj = obj.clone();
             names.resolve(

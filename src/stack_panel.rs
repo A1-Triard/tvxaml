@@ -99,10 +99,12 @@ impl StackPanel {
 pub struct StackPanelTemplate {
     #[serde(flatten)]
     pub panel: PanelTemplate,
-    pub vertical: bool,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub vertical: Option<bool>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="StackPanel")]
 impl Template for StackPanelTemplate {
     fn is_name_scope(&self) -> bool {
         self.panel.view.is_name_scope
@@ -121,6 +123,6 @@ impl Template for StackPanelTemplate {
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         self.panel.apply(instance, names);
         let obj: Rc<dyn IsStackPanel> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_vertical(self.vertical);
+        self.vertical.map(|x| obj.set_vertical(x));
     }
 }

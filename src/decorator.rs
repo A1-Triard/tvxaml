@@ -90,15 +90,17 @@ impl Decorator {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="Decorator")]
 pub struct DecoratorTemplate {
     #[serde(flatten)]
     pub view: ViewTemplate,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
     pub child: Option<Box<dyn Template>>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="Decorator")]
 impl Template for DecoratorTemplate {
     fn is_name_scope(&self) -> bool {
         self.view.is_name_scope
@@ -117,6 +119,6 @@ impl Template for DecoratorTemplate {
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         self.view.apply(instance, names);
         let obj: Rc<dyn IsDecorator> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_child(self.child.as_ref().map(|x| dyn_cast_rc(x.load_content(names)).unwrap()));
+        self.child.as_ref().map(|x| obj.set_child(Some(dyn_cast_rc(x.load_content(names)).unwrap())));
     }
 }

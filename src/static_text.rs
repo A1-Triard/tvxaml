@@ -1,6 +1,6 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::cell::RefCell;
 use crate::template::{Template, Names};
 
@@ -368,18 +368,86 @@ impl StaticText {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[derive(Serialize, Deserialize)]
+enum TextAlign { Left, Center, Right, Justify }
+
+fn serialize_text_align<S>(value: &Option<Option<HAlign>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    let surrogate = match value {
+        Some(Some(HAlign::Left)) => Some(TextAlign::Left),
+        Some(Some(HAlign::Center)) => Some(TextAlign::Center),
+        Some(Some(HAlign::Right)) => Some(TextAlign::Right),
+        Some(None) => Some(TextAlign::Justify),
+        None => None,
+    };
+    surrogate.serialize(s)
+}
+
+fn deserialize_text_align<'de, D>(d: D) -> Result<Option<Option<HAlign>>, D::Error> where D: Deserializer<'de> {
+    let surrogate: Option<TextAlign> = Deserialize::deserialize(d)?;
+    Ok(match surrogate {
+        Some(TextAlign::Left) => Some(Some(HAlign::Left)),
+        Some(TextAlign::Center) => Some(Some(HAlign::Center)),
+        Some(TextAlign::Right) => Some(Some(HAlign::Right)),
+        Some(TextAlign::Justify) => Some(None),
+        None => None,
+    })
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize)]
+#[serde(rename="TextWrapping")]
+enum TextWrappingSurrogate { Wrap, WrapWithOverflow, NoWrap }
+
+fn serialize_text_wrapping<S>(
+    value: &Option<Option<TextWrapping>>,
+    s: S
+) -> Result<S::Ok, S::Error> where S: Serializer {
+    let surrogate = match value {
+        Some(Some(TextWrapping::Wrap)) => Some(TextWrappingSurrogate::Wrap),
+        Some(Some(TextWrapping::WrapWithOverflow)) => Some(TextWrappingSurrogate::WrapWithOverflow),
+        Some(None) => Some(TextWrappingSurrogate::NoWrap),
+        None => None,
+    };
+    surrogate.serialize(s)
+}
+
+fn deserialize_text_wrapping<'de, D>(
+    d: D
+) -> Result<Option<Option<TextWrapping>>, D::Error> where D: Deserializer<'de> {
+    let surrogate: Option<TextWrappingSurrogate> = Deserialize::deserialize(d)?;
+    Ok(match surrogate {
+        Some(TextWrappingSurrogate::Wrap) => Some(Some(TextWrapping::Wrap)),
+        Some(TextWrappingSurrogate::WrapWithOverflow) => Some(Some(TextWrapping::WrapWithOverflow)),
+        Some(TextWrappingSurrogate::NoWrap) => Some(None),
+        None => None,
+    })
+}
+
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="StaticText")]
 pub struct StaticTextTemplate {
     #[serde(flatten)]
     pub view: ViewTemplate,
-    pub text: String,
-    pub text_align: Option<HAlign>,
-    pub text_wrapping: Option<TextWrapping>,
-    pub color: (Fg, Bg),
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(serialize_with="serialize_text_align")]
+    #[serde(deserialize_with="deserialize_text_align")]
+    pub text_align: Option<Option<HAlign>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(serialize_with="serialize_text_wrapping")]
+    #[serde(deserialize_with="deserialize_text_wrapping")]
+    pub text_wrapping: Option<Option<TextWrapping>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub color: Option<(Fg, Bg)>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="StaticText")]
 impl Template for StaticTextTemplate {
     fn is_name_scope(&self) -> bool {
         self.view.is_name_scope
@@ -398,9 +466,9 @@ impl Template for StaticTextTemplate {
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         self.view.apply(instance, names);
         let obj: Rc<dyn IsStaticText> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_text(Rc::new(self.text.clone()));
-        obj.set_text_align(self.text_align);
-        obj.set_text_wrapping(self.text_wrapping);
-        obj.set_color(self.color);
+        self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));
+        self.text_align.map(|x| obj.set_text_align(x));
+        self.text_wrapping.map(|x| obj.set_text_wrapping(x));
+        self.color.map(|x| obj.set_color(x));
     }
 }

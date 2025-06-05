@@ -160,18 +160,26 @@ impl Frame {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="Frame")]
 pub struct FrameTemplate {
     #[serde(flatten)]
     pub decorator: DecoratorTemplate,
-    pub text: String,
-    pub text_align: HAlign,
-    pub double: bool,
-    pub color: (Fg, Bg),
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub text_align: Option<HAlign>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub double: Option<bool>,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub color: Option<(Fg, Bg)>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="Frame")]
 impl Template for FrameTemplate {
     fn is_name_scope(&self) -> bool {
         self.decorator.view.is_name_scope
@@ -190,9 +198,9 @@ impl Template for FrameTemplate {
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         self.decorator.apply(instance, names);
         let obj: Rc<dyn IsFrame> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_text(Rc::new(self.text.clone()));
-        obj.set_text_align(self.text_align);
-        obj.set_double(self.double);
-        obj.set_color(self.color);
+        self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));
+        self.text_align.map(|x| obj.set_text_align(x));
+        self.double.map(|x| obj.set_double(x));
+        self.color.map(|x| obj.set_color(x));
     }
 }

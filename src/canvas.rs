@@ -41,15 +41,17 @@ impl CanvasLayout {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="CanvasLayout")]
 pub struct CanvasLayoutTemplate {
     #[serde(flatten)]
     pub layout: LayoutTemplate,
-    pub tl: Point,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub tl: Option<Point>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="CanvasLayout")]
 impl Template for CanvasLayoutTemplate {
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = CanvasLayout::new();
@@ -59,7 +61,7 @@ impl Template for CanvasLayoutTemplate {
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         self.layout.apply(instance, names);
         let obj: Rc<dyn IsCanvasLayout> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_tl(self.tl);
+        self.tl.map(|x| obj.set_tl(x));
     }
 }
 
@@ -106,14 +108,14 @@ impl Canvas {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="Canvas")]
 pub struct CanvasTemplate {
     #[serde(flatten)]
     pub panel: PanelTemplate,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="Canvas")]
 impl Template for CanvasTemplate {
     fn is_name_scope(&self) -> bool {
         self.panel.view.is_name_scope

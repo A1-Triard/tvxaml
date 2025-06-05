@@ -81,15 +81,17 @@ impl Panel {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename="Panel")]
 pub struct PanelTemplate {
     #[serde(flatten)]
     pub view: ViewTemplate,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Vec::is_empty")]
     pub children: Vec<Box<dyn Template>>,
 }
 
-#[typetag::serde]
+#[typetag::serde(name="Panel")]
 impl Template for PanelTemplate {
     fn is_name_scope(&self) -> bool {
         self.view.is_name_scope
