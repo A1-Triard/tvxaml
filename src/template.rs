@@ -22,7 +22,9 @@ impl Names {
     }
 
     pub fn resolve(&mut self, name: String, client: Box<dyn FnOnce(Rc<dyn IsObj>)>) {
-        self.clients.as_mut().unwrap().push((name, client));
+        if !name.is_empty() {
+            self.clients.as_mut().unwrap().push((name, client));
+        }
     }
 }
 
