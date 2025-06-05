@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::Cell;
-use crate::template::Template;
+use crate::template::{Template, Names};
 use crate::view_vec::ViewVecExt;
 
 import! { pub canvas_layout:
@@ -56,8 +56,8 @@ impl Template for CanvasLayoutTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
-        self.layout.apply(instance);
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+        self.layout.apply(instance, names);
         let obj: Rc<dyn IsCanvasLayout> = dyn_cast_rc(instance.clone()).unwrap();
         obj.set_tl(self.tl);
     }
@@ -121,7 +121,7 @@ impl Template for CanvasTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
-        self.panel.apply(instance);
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+        self.panel.apply(instance, names);
     }
 }

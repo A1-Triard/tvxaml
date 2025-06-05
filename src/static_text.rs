@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
-use crate::template::Template;
+use crate::template::{Template, Names};
 
 mod text_renderer {
     use either::{Left, Right};
@@ -387,8 +387,8 @@ impl Template for StaticTextTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
-        self.view.apply(instance);
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+        self.view.apply(instance, names);
         let obj: Rc<dyn IsStaticText> = dyn_cast_rc(instance.clone()).unwrap();
         obj.set_text(Rc::new(self.text.clone()));
         obj.set_text_align(self.text_align);

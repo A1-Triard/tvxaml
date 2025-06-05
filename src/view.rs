@@ -5,8 +5,9 @@ use std::cmp::min;
 use std::mem::replace;
 use std::rc::{self};
 use std::cell::RefCell;
-use crate::template::Template;
+use crate::template::{Template, Names};
 use crate::app::{App, AppExt};
+use crate::obj_col::{ObjCol, ObjColExt};
 
 import! { pub layout:
     use [obj basic_oop::obj];
@@ -23,7 +24,7 @@ impl Template for LayoutTemplate {
         dyn_cast_rc(Layout::new()).unwrap()
     }
 
-    fn apply(&self, _instance: &Rc<dyn IsObj>) { }
+    fn apply(&self, _instance: &Rc<dyn IsObj>, _names: &mut Names) { }
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -61,40 +62,64 @@ import! { pub view:
     use std::rc::Rc;
     use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
     use crate::app::IsApp;
+    use crate::obj_col::IsObjCol;
     use crate::render_port::RenderPort;
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename="View")]
 pub struct ViewTemplate {
+    pub is_name_scope: bool,
+    pub name: String,
+    pub resources: Vec<Box<dyn Template>>,
     pub layout: Box<dyn Template>,
     pub min_size: Vector,
     pub max_size: Vector,
     pub h_align: Option<HAlign>,
     pub v_align: Option<VAlign>,
     pub margin: Thickness,
+    pub focus_tab: String,
 }
 
 #[typetag::serde]
 impl Template for ViewTemplate {
+    fn is_name_scope(&self) -> bool {
+        self.is_name_scope
+    }
+
+    fn name(&self) -> Option<&String> {
+        Some(&self.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = View::new();
         obj.init();
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
         let obj: Rc<dyn IsView> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_layout(dyn_cast_rc(self.layout.load_content()).unwrap());
+        for resource in &self.resources {
+            obj.resources().insert(resource.load_content(names));
+        }
+        obj.set_layout(dyn_cast_rc(self.layout.load_content(names)).unwrap());
         obj.set_min_size(self.min_size);
         obj.set_max_size(self.max_size);
         obj.set_h_align(self.h_align);
         obj.set_v_align(self.v_align);
         obj.set_margin(self.margin); 
+        {
+            let obj = obj.clone();
+            names.resolve(
+                self.focus_tab.clone(),
+                Box::new(move |x| obj.set_focus_tab(Some(&dyn_cast_rc(x).unwrap())))
+            );
+        }
     }
 }
 
 struct ViewData {
+    resources: Rc<dyn IsObjCol>,
     layout: Rc<dyn IsLayout>,
     layout_parent: rc::Weak<dyn IsView>,
     visual_parent: rc::Weak<dyn IsView>,
@@ -109,6 +134,7 @@ struct ViewData {
     v_align: Option<VAlign>,
     margin: Thickness,
     app: rc::Weak<dyn IsApp>,
+    focus_tab: rc::Weak<dyn IsView>,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -116,6 +142,8 @@ pub struct View {
     data: RefCell<ViewData>,
     #[virt]
     init: fn(),
+    #[non_virt]
+    resources: fn() -> Rc<dyn IsObjCol>,
     #[non_virt]
     layout: fn() -> Rc<dyn IsLayout>,
     #[non_virt]
@@ -148,6 +176,10 @@ pub struct View {
     margin: fn() -> Thickness,
     #[non_virt]
     set_margin: fn(value: Thickness),
+    #[non_virt]
+    focus_tab: fn() -> Option<Rc<dyn IsView>>,
+    #[non_virt]
+    set_focus_tab: fn(value: Option<&Rc<dyn IsView>>),
     #[non_virt]
     desired_size: fn() -> Vector,
     #[non_virt]
@@ -193,6 +225,7 @@ impl View {
         View {
             obj: unsafe { Obj::new_raw(vtable) },
             data: RefCell::new(ViewData {
+                resources: ObjCol::new(),
                 layout: Layout::new(),
                 layout_parent: <rc::Weak::<View>>::new(),
                 visual_parent: <rc::Weak::<View>>::new(),
@@ -201,6 +234,7 @@ impl View {
                 h_align: None,
                 v_align: None,
                 margin: Thickness::all(0),
+                focus_tab: <rc::Weak::<View>>::new(),
                 measure_size: None,
                 desired_size: Vector::null(),
                 arrange_size: None,
@@ -212,6 +246,10 @@ impl View {
     }
 
     pub fn init_impl(_this: &Rc<dyn IsView>) { }
+
+    pub fn resources_impl(this: &Rc<dyn IsView>) -> Rc<dyn IsObjCol> {
+        this.view().data.borrow().resources.clone()
+    }
 
     pub fn layout_impl(this: &Rc<dyn IsView>) -> Rc<dyn IsLayout> {
         this.view().data.borrow().layout.clone()
@@ -306,6 +344,15 @@ impl View {
     pub fn set_margin_impl(this: &Rc<dyn IsView>, value: Thickness) {
         this.view().data.borrow_mut().margin = value;
         this.invalidate_measure();
+    }
+
+    pub fn focus_tab_impl(this: &Rc<dyn IsView>) -> Option<Rc<dyn IsView>> {
+        this.view().data.borrow().focus_tab.upgrade()
+    }
+
+    pub fn set_focus_tab_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsView>>) {
+        this.view().data.borrow_mut().focus_tab
+            = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
     }
 
     pub fn invalidate_measure_impl(this: &Rc<dyn IsView>) {

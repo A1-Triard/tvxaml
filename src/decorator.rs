@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
-use crate::template::Template;
+use crate::template::{Template, Names};
 
 import! { pub decorator:
     use [view crate::view];
@@ -106,9 +106,9 @@ impl Template for DecoratorTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
-        self.view.apply(instance);
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+        self.view.apply(instance, names);
         let obj: Rc<dyn IsDecorator> = dyn_cast_rc(instance.clone()).unwrap();
-        obj.set_child(self.child.as_ref().map(|x| dyn_cast_rc(x.load_content()).unwrap()));
+        obj.set_child(self.child.as_ref().map(|x| dyn_cast_rc(x.load_content(names)).unwrap()));
     }
 }

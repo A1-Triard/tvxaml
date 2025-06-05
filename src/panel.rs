@@ -1,7 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
-use crate::template::Template;
+use crate::template::{Template, Names};
 
 import! { panel_children_vec:
     use [view_vec crate::view_vec];
@@ -97,11 +97,11 @@ impl Template for PanelTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
-        self.view.apply(instance);
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+        self.view.apply(instance, names);
         let obj: Rc<dyn IsPanel> = dyn_cast_rc(instance.clone()).unwrap();
         for child in &self.children {
-            obj.children().push(dyn_cast_rc(child.load_content()).unwrap());
+            obj.children().push(dyn_cast_rc(child.load_content(names)).unwrap());
         }
     }
 }

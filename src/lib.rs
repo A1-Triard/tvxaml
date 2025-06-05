@@ -3,6 +3,7 @@
 #![feature(slice_from_ptr_range)]
 #![feature(trusted_len)]
 
+pub mod obj_col;
 pub mod template;
 pub mod render_port;
 pub mod app;
