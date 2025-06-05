@@ -2,7 +2,6 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
-use tvxaml_screen_base::{Fg, Bg};
 use crate::template::Template;
 
 mod text_renderer {
@@ -244,6 +243,7 @@ use text_renderer::render_text;
 
 import! { pub static_text:
     use [view crate::view];
+    use tvxaml_screen_base::{Fg, Bg};
 }
 
 pub use text_renderer::TextWrapping;
