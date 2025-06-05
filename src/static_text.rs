@@ -10,6 +10,7 @@ mod text_renderer {
     use int_vec_2d::{Point, Rect, Vector, HAlign, Range1d};
     use iter_identify_first_last::IteratorIdentifyFirstLastExt;
     use itertools::Itertools;
+    use serde::{Serialize, Deserialize};
     use std::cmp::{max, min};
     use std::iter::{self};
     use std::mem::{replace, transmute};
@@ -18,6 +19,7 @@ mod text_renderer {
     use unicode_width::UnicodeWidthChar;
 
     #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+    #[derive(Serialize, Deserialize)]
     pub enum TextWrapping {
         Wrap,
         WrapWithOverflow,
@@ -250,6 +252,7 @@ struct StaticTextData {
     text: Rc<String>,
     text_align: Option<HAlign>,
     text_wrapping: Option<TextWrapping>,
+    color: (Fg, Bg),
 }
 
 #[class_unsafe(inherits_View)]
@@ -267,6 +270,10 @@ pub struct StaticText {
     text_wrapping: fn() -> Option<TextWrapping>,
     #[non_virt]
     set_text_wrapping: fn(value: Option<TextWrapping>),
+    #[non_virt]
+    color: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color: fn(value: (Fg, Bg)),
     #[over]
     measure_override: (),
     #[over]
@@ -287,6 +294,7 @@ impl StaticText {
                 text: Rc::new(String::new()),
                 text_align: Some(HAlign::Left),
                 text_wrapping: None,
+                color: (Fg::White, Bg::Blue),
             }),
         }
     }
@@ -320,6 +328,15 @@ impl StaticText {
         this.invalidate_render();
     }
 
+    pub fn color_impl(this: &Rc<dyn TStaticText>) -> (Fg, Bg) {
+        this.static_text().data.borrow().color
+    }
+
+    pub fn set_color_impl(this: &Rc<dyn TStaticText>, value: (Fg, Bg)) {
+        this.static_text().data.borrow_mut().color = value;
+        this.invalidate_render();
+    }
+
     pub fn measure_override_impl(this: &Rc<dyn TView>, w: Option<i16>, h: Option<i16>) -> Vector {
         let this: Rc<dyn TStaticText> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.static_text().data.borrow();
@@ -340,8 +357,9 @@ impl StaticText {
         let bounds = this.inner_render_bounds();
         let this: Rc<dyn TStaticText> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.static_text().data.borrow();
+        rp.fill_bg(data.color);
         render_text(
-            |p, s| rp.text(p, (Fg::Red, Bg::Blue), s),
+            |p, s| rp.text(p, data.color, s),
             bounds,
             data.text_align,
             data.text_wrapping,
@@ -357,6 +375,8 @@ pub struct StaticTextTemplate {
     pub view: ViewTemplate,
     pub text: String,
     pub text_align: Option<HAlign>,
+    pub text_wrapping: Option<TextWrapping>,
+    pub color: (Fg, Bg),
 }
 
 #[typetag::serde]
@@ -372,5 +392,7 @@ impl Template for StaticTextTemplate {
         let obj: Rc<dyn TStaticText> = dyn_cast_rc(instance.clone()).unwrap();
         obj.set_text(Rc::new(self.text.clone()));
         obj.set_text_align(self.text_align);
+        obj.set_text_wrapping(self.text_wrapping);
+        obj.set_color(self.color);
     }
 }

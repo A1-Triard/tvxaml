@@ -24,6 +24,7 @@ use core::fmt::{self, Debug, Display, Formatter};
 use core::num::NonZeroU16;
 use enum_derive_2018::{EnumDisplay, EnumFromStr, IterVariants};
 use macro_attr_2018::macro_attr;
+use serde::{Serialize, Deserialize};
 use unicode_width::UnicodeWidthChar;
 
 pub use int_vec_2d::*;
@@ -71,6 +72,7 @@ pub fn is_text_fit_in(w: i16, s: &str) -> bool {
 macro_attr! {
     #[derive(Eq, PartialEq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
     #[derive(EnumDisplay!, EnumFromStr!, IterVariants!(BgVariants))]
+    #[derive(Serialize, Deserialize)]
     pub enum Bg {
         None,
         Black,
@@ -87,6 +89,7 @@ macro_attr! {
 macro_attr! {
     #[derive(Eq, PartialEq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
     #[derive(EnumDisplay!, EnumFromStr!, IterVariants!(FgVariants))]
+    #[derive(Serialize, Deserialize)]
     pub enum Fg {
         Black,
         Red,
