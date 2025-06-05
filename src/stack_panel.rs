@@ -23,7 +23,7 @@ pub struct StackPanel {
 }
 
 impl StackPanel {
-    pub fn new() -> Rc<dyn TStackPanel> {
+    pub fn new() -> Rc<dyn IsStackPanel> {
         Rc::new(unsafe { Self::new_raw(STACK_PANEL_VTABLE.as_ptr()) })
     }
 
@@ -34,17 +34,17 @@ impl StackPanel {
         }
     }
 
-    pub fn vertical_impl(this: &Rc<dyn TStackPanel>) -> bool {
+    pub fn vertical_impl(this: &Rc<dyn IsStackPanel>) -> bool {
         this.stack_panel().vertical.get()
     }
 
-    pub fn set_vertical_impl(this: &Rc<dyn TStackPanel>, value: bool) {
+    pub fn set_vertical_impl(this: &Rc<dyn IsStackPanel>, value: bool) {
         this.stack_panel().vertical.set(value);
         this.invalidate_measure();
     }
 
-    pub fn measure_override_impl(this: &Rc<dyn TView>, w: Option<i16>, h: Option<i16>) -> Vector {
-        let this: Rc<dyn TStackPanel> = dyn_cast_rc(this.clone()).unwrap();
+    pub fn measure_override_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) -> Vector {
+        let this: Rc<dyn IsStackPanel> = dyn_cast_rc(this.clone()).unwrap();
         if this.stack_panel().vertical.get() {
             let mut size = Vector::null();
             for child in this.children().iter() {
@@ -66,8 +66,8 @@ impl StackPanel {
         }
     }
 
-    pub fn arrange_override_impl(this: &Rc<dyn TView>, bounds: Rect) -> Vector {
-        let this: Rc<dyn TStackPanel> = dyn_cast_rc(this.clone()).unwrap();
+    pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
+        let this: Rc<dyn IsStackPanel> = dyn_cast_rc(this.clone()).unwrap();
         if this.stack_panel().vertical.get() {
             let mut pos = bounds.tl;
             let mut size = Vector::null();
@@ -104,15 +104,15 @@ pub struct StackPanelTemplate {
 
 #[typetag::serde]
 impl Template for StackPanelTemplate {
-    fn create_instance(&self) -> Rc<dyn TObj> {
+    fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = StackPanel::new();
         obj.init();
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn TObj>) {
+    fn apply(&self, instance: &Rc<dyn IsObj>) {
         self.panel.apply(instance);
-        let obj: Rc<dyn TStackPanel> = dyn_cast_rc(instance.clone()).unwrap();
+        let obj: Rc<dyn IsStackPanel> = dyn_cast_rc(instance.clone()).unwrap();
         obj.set_vertical(self.vertical);
     }
 }

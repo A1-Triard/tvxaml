@@ -10,7 +10,7 @@ import! { pub app:
     use int_vec_2d::Rect;
     use std::rc::Rc;
     use tvxaml_screen_base::Error as tvxaml_screen_base_Error;
-    use crate::view::TView;
+    use crate::view::IsView;
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -18,10 +18,10 @@ pub struct App {
     screen: RefCell<Box<dyn Screen>>,
     cursor: Cell<Option<Point>>,
     exit_code: Cell<Option<u8>>,
-    root: Rc<dyn TView>,
+    root: Rc<dyn IsView>,
     invalidated_rect: Cell<Rect>,
     #[non_virt]
-    root: fn() -> Rc<dyn TView>,
+    root: fn() -> Rc<dyn IsView>,
     #[non_virt]
     run: fn() -> Result<u8, tvxaml_screen_base_Error>,
     #[non_virt]
@@ -33,11 +33,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(screen: Box<dyn Screen>, root: Rc<dyn TView>) -> Rc<dyn TApp> {
+    pub fn new(screen: Box<dyn Screen>, root: Rc<dyn IsView>) -> Rc<dyn IsApp> {
         Rc::new(unsafe { Self::new_raw(screen, root, APP_VTABLE.as_ptr()) })
     }
 
-    pub unsafe fn new_raw(screen: Box<dyn Screen>, root: Rc<dyn TView>, vtable: Vtable) -> Self {
+    pub unsafe fn new_raw(screen: Box<dyn Screen>, root: Rc<dyn IsView>, vtable: Vtable) -> Self {
         App {
             obj: unsafe { Obj::new_raw(vtable) },
             screen: RefCell::new(screen),
@@ -48,11 +48,11 @@ impl App {
         }
     }
 
-    pub fn root_impl(this: &Rc<dyn TApp>) -> Rc<dyn TView> {
+    pub fn root_impl(this: &Rc<dyn IsApp>) -> Rc<dyn IsView> {
         this.app().root.clone()
     }
 
-    fn render(view: &Rc<dyn TView>, rp: &mut RenderPort) {
+    fn render(view: &Rc<dyn IsView>, rp: &mut RenderPort) {
         if rp.invalidated_rect.intersect(rp.bounds).is_empty() {
             return;
         }
@@ -68,7 +68,7 @@ impl App {
         }
     }
 
-    pub fn run_impl(this: &Rc<dyn TApp>) -> Result<u8, tvxaml_screen_base_Error> {
+    pub fn run_impl(this: &Rc<dyn IsApp>) -> Result<u8, tvxaml_screen_base_Error> {
         this.root().set_app(Some(this));
         let res = loop {
             if let Some(exit_code) = this.app().exit_code.get() {
@@ -97,15 +97,15 @@ impl App {
         res
     }
 
-    pub fn exit_impl(this: &Rc<dyn TApp>, exit_code: u8) {
+    pub fn exit_impl(this: &Rc<dyn IsApp>, exit_code: u8) {
         this.app().exit_code.set(Some(exit_code));
     }
 
-    pub fn quit_impl(this: &Rc<dyn TApp>) {
+    pub fn quit_impl(this: &Rc<dyn IsApp>) {
         this.exit(0);
     }
 
-    pub fn invalidate_render_impl(this: &Rc<dyn TApp>, rect: Rect) {
+    pub fn invalidate_render_impl(this: &Rc<dyn IsApp>, rect: Rect) {
         let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
         let union = this.app().invalidated_rect.get().union_intersect(rect, app_rect);
         this.app().invalidated_rect.set(union);

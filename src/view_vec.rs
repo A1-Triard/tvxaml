@@ -9,19 +9,19 @@ use crate::view::{View, ViewExt};
 import! { pub view_vec:
     use [obj basic_oop::obj];
     use std::rc::Rc;
-    use crate::view::TView;
+    use crate::view::IsView;
 }
 
 #[class_unsafe(inherits_Obj)]
 pub struct ViewVec {
-    owner: RefCell<rc::Weak<dyn TView>>,
-    items: RefCell<Vec<Rc<dyn TView>>>,
+    owner: RefCell<rc::Weak<dyn IsView>>,
+    items: RefCell<Vec<Rc<dyn IsView>>>,
     layout: bool,
     visual: bool,
     #[non_virt]
-    owner: fn() -> Option<Rc<dyn TView>>,
+    owner: fn() -> Option<Rc<dyn IsView>>,
     #[virt]
-    init: fn(owner: &Rc<dyn TView>),
+    init: fn(owner: &Rc<dyn IsView>),
     #[virt]
     attach: fn(index: usize),
     #[virt]
@@ -31,15 +31,15 @@ pub struct ViewVec {
     #[non_virt]
     iter: fn() -> ViewVecIter,
     #[non_virt]
-    at: fn(index: usize) -> Rc<dyn TView>,
+    at: fn(index: usize) -> Rc<dyn IsView>,
     #[non_virt]
-    insert: fn(index: usize, element: Rc<dyn TView>),
+    insert: fn(index: usize, element: Rc<dyn IsView>),
     #[non_virt]
-    remove: fn(index: usize) -> Rc<dyn TView>,
+    remove: fn(index: usize) -> Rc<dyn IsView>,
     #[non_virt]
-    push: fn(value: Rc<dyn TView>),
+    push: fn(value: Rc<dyn IsView>),
     #[non_virt]
-    pop: fn() -> Option<Rc<dyn TView>>,
+    pop: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
     clear: fn(),
     #[non_virt]
@@ -47,11 +47,11 @@ pub struct ViewVec {
     #[non_virt]
     is_empty: fn() -> bool,
     #[non_virt]
-    replace: fn(index: usize, element: Rc<dyn TView>) -> Rc<dyn TView>,
+    replace: fn(index: usize, element: Rc<dyn IsView>) -> Rc<dyn IsView>,
 }
 
 impl ViewVec {
-    pub fn new(layout: bool, visual: bool) -> Rc<dyn TViewVec> {
+    pub fn new(layout: bool, visual: bool) -> Rc<dyn IsViewVec> {
         Rc::new(unsafe { Self::new_raw(layout, visual, VIEW_VEC_VTABLE.as_ptr()) })
     }
 
@@ -65,15 +65,15 @@ impl ViewVec {
         }
     }
 
-    pub fn owner_impl(this: &Rc<dyn TViewVec>) -> Option<Rc<dyn TView>> {
+    pub fn owner_impl(this: &Rc<dyn IsViewVec>) -> Option<Rc<dyn IsView>> {
         this.view_vec().owner.borrow().upgrade()
     }
 
-    pub fn init_impl(this: &Rc<dyn TViewVec>, owner: &Rc<dyn TView>) {
+    pub fn init_impl(this: &Rc<dyn IsViewVec>, owner: &Rc<dyn IsView>) {
         this.view_vec().owner.replace(Rc::downgrade(owner));
     }
 
-    pub fn attach_impl(this: &Rc<dyn TViewVec>, index: usize) {
+    pub fn attach_impl(this: &Rc<dyn IsViewVec>, index: usize) {
         let owner = this.view_vec().owner.borrow().upgrade();
         let vec = Self::as_vec(this);
         let item = &vec[index];
@@ -86,7 +86,7 @@ impl ViewVec {
         }
     }
 
-    pub fn detach_impl(this: &Rc<dyn TViewVec>, index: usize) {
+    pub fn detach_impl(this: &Rc<dyn IsViewVec>, index: usize) {
         let vec = Self::as_vec(this);
         let item = &vec[index];
         if this.view_vec().visual {
@@ -99,25 +99,25 @@ impl ViewVec {
         }
     }
 
-    pub fn changed_impl(_this: &Rc<dyn TViewVec>) { }
+    pub fn changed_impl(_this: &Rc<dyn IsViewVec>) { }
 
-    fn as_vec(this: &Rc<dyn TViewVec>) -> cell::Ref<Vec<Rc<dyn TView>>> {
+    fn as_vec(this: &Rc<dyn IsViewVec>) -> cell::Ref<Vec<Rc<dyn IsView>>> {
         this.view_vec().items.borrow()
     }
 
-    pub fn at_impl(this: &Rc<dyn TViewVec>, index: usize) -> Rc<dyn TView> {
+    pub fn at_impl(this: &Rc<dyn IsViewVec>, index: usize) -> Rc<dyn IsView> {
         let vec = Self::as_vec(this);
         vec[index].clone()
     }
 
-    pub fn insert_impl(this: &Rc<dyn TViewVec>, index: usize, element: Rc<dyn TView>) {
+    pub fn insert_impl(this: &Rc<dyn IsViewVec>, index: usize, element: Rc<dyn IsView>) {
         let mut vec = this.view_vec().items.borrow_mut();
         vec.insert(index, element);
         this.attach(index);
         this.changed();
     }
 
-    pub fn remove_impl(this: &Rc<dyn TViewVec>, index: usize) -> Rc<dyn TView> {
+    pub fn remove_impl(this: &Rc<dyn IsViewVec>, index: usize) -> Rc<dyn IsView> {
         this.detach(index);
         let mut vec = this.view_vec().items.borrow_mut();
         let old = vec.remove(index);
@@ -125,7 +125,7 @@ impl ViewVec {
         old
     }
 
-    pub fn push_impl(this: &Rc<dyn TViewVec>, value: Rc<dyn TView>) {
+    pub fn push_impl(this: &Rc<dyn IsViewVec>, value: Rc<dyn IsView>) {
         let mut vec = this.view_vec().items.borrow_mut();
         vec.push(value);
         let index = vec.len() - 1;
@@ -133,7 +133,7 @@ impl ViewVec {
         this.changed();
     }
 
-    pub fn pop_impl(this: &Rc<dyn TViewVec>) -> Option<Rc<dyn TView>> {
+    pub fn pop_impl(this: &Rc<dyn IsViewVec>) -> Option<Rc<dyn IsView>> {
         let len = this.len();
         if len == 0 { return None; }
         let index = len - 1;
@@ -144,7 +144,7 @@ impl ViewVec {
         Some(old)
     }
 
-    pub fn clear_impl(this: &Rc<dyn TViewVec>) {
+    pub fn clear_impl(this: &Rc<dyn IsViewVec>) {
         let len = this.len();
         for index in 0 .. len {
             this.detach(index);
@@ -154,17 +154,17 @@ impl ViewVec {
         this.changed();
     }
 
-    pub fn len_impl(this: &Rc<dyn TViewVec>) -> usize {
+    pub fn len_impl(this: &Rc<dyn IsViewVec>) -> usize {
         let vec = Self::as_vec(this);
         vec.len()
     }
 
-    pub fn is_empty_impl(this: &Rc<dyn TViewVec>) -> bool {
+    pub fn is_empty_impl(this: &Rc<dyn IsViewVec>) -> bool {
         let vec = Self::as_vec(this);
         vec.is_empty()
     }
 
-    pub fn replace_impl(this: &Rc<dyn TViewVec>, index: usize, element: Rc<dyn TView>) -> Rc<dyn TView> {
+    pub fn replace_impl(this: &Rc<dyn IsViewVec>, index: usize, element: Rc<dyn IsView>) -> Rc<dyn IsView> {
         this.detach(index);
         let mut vec = this.view_vec().items.borrow_mut();
         let old = replace(&mut vec[index], element);
@@ -173,20 +173,20 @@ impl ViewVec {
         old
     }
 
-    pub fn iter_impl(this: &Rc<dyn TViewVec>) -> ViewVecIter {
+    pub fn iter_impl(this: &Rc<dyn IsViewVec>) -> ViewVecIter {
         let len = this.len();
         ViewVecIter { vec: this.clone(), index: 0, len }
     }
 }
 
 pub struct ViewVecIter {
-    vec: Rc<dyn TViewVec>,
+    vec: Rc<dyn IsViewVec>,
     index: usize,
     len: usize,
 }
 
 impl Iterator for ViewVecIter {
-    type Item = Rc<dyn TView>;
+    type Item = Rc<dyn IsView>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index == self.len { return None; }

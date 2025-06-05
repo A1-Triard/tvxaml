@@ -283,7 +283,7 @@ pub struct StaticText {
 }
 
 impl StaticText {
-    pub fn new() -> Rc<dyn TStaticText> {
+    pub fn new() -> Rc<dyn IsStaticText> {
         Rc::new(unsafe { Self::new_raw(STATIC_TEXT_VTABLE.as_ptr()) })
     }
 
@@ -299,46 +299,46 @@ impl StaticText {
         }
     }
 
-    pub fn text_impl(this: &Rc<dyn TStaticText>) -> Rc<String> {
+    pub fn text_impl(this: &Rc<dyn IsStaticText>) -> Rc<String> {
         this.static_text().data.borrow().text.clone()
     }
 
-    pub fn set_text_impl(this: &Rc<dyn TStaticText>, value: Rc<String>) {
+    pub fn set_text_impl(this: &Rc<dyn IsStaticText>, value: Rc<String>) {
         this.static_text().data.borrow_mut().text = value;
         this.invalidate_measure();
         this.invalidate_render();
     }
 
-    pub fn text_align_impl(this: &Rc<dyn TStaticText>) -> Option<HAlign> {
+    pub fn text_align_impl(this: &Rc<dyn IsStaticText>) -> Option<HAlign> {
         this.static_text().data.borrow().text_align
     }
 
-    pub fn set_text_align_impl(this: &Rc<dyn TStaticText>, value: Option<HAlign>) {
+    pub fn set_text_align_impl(this: &Rc<dyn IsStaticText>, value: Option<HAlign>) {
         this.static_text().data.borrow_mut().text_align = value;
         this.invalidate_render();
     }
 
-    pub fn text_wrapping_impl(this: &Rc<dyn TStaticText>) -> Option<TextWrapping> {
+    pub fn text_wrapping_impl(this: &Rc<dyn IsStaticText>) -> Option<TextWrapping> {
         this.static_text().data.borrow().text_wrapping
     }
 
-    pub fn set_text_wrapping_impl(this: &Rc<dyn TStaticText>, value: Option<TextWrapping>) {
+    pub fn set_text_wrapping_impl(this: &Rc<dyn IsStaticText>, value: Option<TextWrapping>) {
         this.static_text().data.borrow_mut().text_wrapping = value;
         this.invalidate_measure();
         this.invalidate_render();
     }
 
-    pub fn color_impl(this: &Rc<dyn TStaticText>) -> (Fg, Bg) {
+    pub fn color_impl(this: &Rc<dyn IsStaticText>) -> (Fg, Bg) {
         this.static_text().data.borrow().color
     }
 
-    pub fn set_color_impl(this: &Rc<dyn TStaticText>, value: (Fg, Bg)) {
+    pub fn set_color_impl(this: &Rc<dyn IsStaticText>, value: (Fg, Bg)) {
         this.static_text().data.borrow_mut().color = value;
         this.invalidate_render();
     }
 
-    pub fn measure_override_impl(this: &Rc<dyn TView>, w: Option<i16>, h: Option<i16>) -> Vector {
-        let this: Rc<dyn TStaticText> = dyn_cast_rc(this.clone()).unwrap();
+    pub fn measure_override_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) -> Vector {
+        let this: Rc<dyn IsStaticText> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.static_text().data.borrow();
         render_text(
             |_, _| { },
@@ -349,13 +349,13 @@ impl StaticText {
         ).size
     }
 
-    pub fn arrange_override_impl(_this: &Rc<dyn TView>, bounds: Rect) -> Vector {
+    pub fn arrange_override_impl(_this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
         bounds.size
     }
 
-    pub fn render_impl(this: &Rc<dyn TView>, rp: &mut RenderPort) {
+    pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
         let bounds = this.inner_render_bounds();
-        let this: Rc<dyn TStaticText> = dyn_cast_rc(this.clone()).unwrap();
+        let this: Rc<dyn IsStaticText> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.static_text().data.borrow();
         rp.fill_bg(data.color);
         render_text(
@@ -381,15 +381,15 @@ pub struct StaticTextTemplate {
 
 #[typetag::serde]
 impl Template for StaticTextTemplate {
-    fn create_instance(&self) -> Rc<dyn TObj> {
+    fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = StaticText::new();
         obj.init();
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn TObj>) {
+    fn apply(&self, instance: &Rc<dyn IsObj>) {
         self.view.apply(instance);
-        let obj: Rc<dyn TStaticText> = dyn_cast_rc(instance.clone()).unwrap();
+        let obj: Rc<dyn IsStaticText> = dyn_cast_rc(instance.clone()).unwrap();
         obj.set_text(Rc::new(self.text.clone()));
         obj.set_text_align(self.text_align);
         obj.set_text_wrapping(self.text_wrapping);

@@ -10,8 +10,8 @@ members = [
 ]
 
 [dependencies]
-basic-oop = "0.6.0"
-dynamic-cast = "0.1.6"
+basic-oop = "0.7.0"
+dynamic-cast = "0.2.0"
 either = { version = "1.15.0", default-features = false }
 int-vec-2d = { version = "0.1.5", features = ["serde"] }
 iter-identify_first_last = "0.2.3"

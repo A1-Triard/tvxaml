@@ -3,53 +3,25 @@ use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use crate::template::Template;
 
-import! { panel_children_vec:
-    use [view_vec crate::view_vec];
-}
-
-#[class_unsafe(inherits_ViewVec)]
-struct PanelChildrenVec {
-    #[over]
-    changed: (),
-}
-
-impl PanelChildrenVec {
-    fn new() -> Rc<dyn IsPanelChildrenVec> {
-        Rc::new(unsafe { Self::new_raw(PANEL_CHILDREN_VEC_VTABLE.as_ptr()) })
-    }
-
-    unsafe fn new_raw(vtable: Vtable) -> Self {
-        PanelChildrenVec {
-            view_vec: unsafe { ViewVec::new_raw(true, true, vtable) },
-        }
-    }
-
-    fn changed_impl(this: &Rc<dyn IsViewVec>) {
-        ViewVec::changed_impl(this);
-        this.owner().map(|x| x.invalidate_measure());
-    }
-}
-
-import! { pub panel:
+import! { pub decorator:
     use [view crate::view];
-    use crate::view_vec::IsViewVec;
 }
 
 #[class_unsafe(inherits_View)]
-pub struct Panel {
-    children: Rc<dyn IsViewVec>,
-    #[over]
-    init: (),
+pub struct Decorator {
+    child: RefCell<Rc<dyn IsView>>,
     #[non_virt]
-    children: fn() -> Rc<dyn IsViewVec>,
+    child: fn() -> Rc<dyn IsView>,
+    #[non_virt]
+    set_child: fn(value: Rc<dyn IsView>),
     #[over]
     visual_children_count: (),
     #[over]
     visual_child: (),
 }
 
-impl Panel {
-    pub fn new() -> Rc<dyn IsPanel> {
+impl Decorator {
+    pub fn new() -> Rc<dyn IsDecorator> {
         Rc::new(unsafe { Self::new_raw(PANEL_VTABLE.as_ptr()) })
     }
 
@@ -62,21 +34,21 @@ impl Panel {
 
     pub fn init_impl(this: &Rc<dyn IsView>) {
         View::init_impl(this);
-        let panel: Rc<dyn IsPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let panel: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
         panel.panel().children.init(this);
     }
 
-    pub fn children_impl(this: &Rc<dyn IsPanel>) -> Rc<dyn IsViewVec> {
+    pub fn children_impl(this: &Rc<dyn TPanel>) -> Rc<dyn IsViewVec> {
         this.panel().children.clone()
     }
 
     pub fn visual_children_count_impl(this: &Rc<dyn IsView>) -> usize {
-        let this: Rc<dyn IsPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let this: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
         this.panel().children.len()
     }
 
     pub fn visual_child_impl(this: &Rc<dyn IsView>, index: usize) -> Rc<dyn IsView> {
-        let this: Rc<dyn IsPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let this: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
         this.panel().children.at(index)
     }
 }
@@ -91,15 +63,15 @@ pub struct PanelTemplate {
 
 #[typetag::serde]
 impl Template for PanelTemplate {
-    fn create_instance(&self) -> Rc<dyn IsObj> {
+    fn create_instance(&self) -> Rc<dyn TObj> {
         let obj = Panel::new();
         obj.init();
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>) {
+    fn apply(&self, instance: &Rc<dyn TObj>) {
         self.view.apply(instance);
-        let obj: Rc<dyn IsPanel> = dyn_cast_rc(instance.clone()).unwrap();
+        let obj: Rc<dyn TPanel> = dyn_cast_rc(instance.clone()).unwrap();
         for child in &self.children {
             obj.children().push(dyn_cast_rc(child.load_content()).unwrap());
         }
