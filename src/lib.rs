@@ -9,5 +9,6 @@ pub mod app;
 pub mod view;
 pub mod view_vec;
 pub mod panel;
+pub mod decorator;
 pub mod stack_panel;
 pub mod static_text;

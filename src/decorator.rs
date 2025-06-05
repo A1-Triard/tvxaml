@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
+use std::cell::RefCell;
 use crate::template::Template;
 
 import! { pub decorator:
@@ -9,11 +10,11 @@ import! { pub decorator:
 
 #[class_unsafe(inherits_View)]
 pub struct Decorator {
-    child: RefCell<Rc<dyn IsView>>,
+    child: RefCell<Option<Rc<dyn IsView>>>,
     #[non_virt]
-    child: fn() -> Rc<dyn IsView>,
+    child: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
-    set_child: fn(value: Rc<dyn IsView>),
+    set_child: fn(value: Option<Rc<dyn IsView>>),
     #[over]
     visual_children_count: (),
     #[over]
@@ -22,58 +23,68 @@ pub struct Decorator {
 
 impl Decorator {
     pub fn new() -> Rc<dyn IsDecorator> {
-        Rc::new(unsafe { Self::new_raw(PANEL_VTABLE.as_ptr()) })
+        Rc::new(unsafe { Self::new_raw(DECORATOR_VTABLE.as_ptr()) })
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
-        Panel {
+        Decorator {
             view: unsafe { View::new_raw(vtable) },
-            children: dyn_cast_rc(PanelChildrenVec::new()).unwrap()
+            child: RefCell::new(None),
         }
     }
 
-    pub fn init_impl(this: &Rc<dyn IsView>) {
-        View::init_impl(this);
-        let panel: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
-        panel.panel().children.init(this);
+    pub fn child_impl(this: &Rc<dyn IsDecorator>) -> Option<Rc<dyn IsView>> {
+        this.decorator().child.borrow().clone()
     }
 
-    pub fn children_impl(this: &Rc<dyn TPanel>) -> Rc<dyn IsViewVec> {
-        this.panel().children.clone()
+    pub fn set_child_impl(this: &Rc<dyn IsDecorator>, value: Option<Rc<dyn IsView>>) {
+        let child = this.decorator().child.borrow().clone();
+        if let Some(child) = child {
+            this.remove_visual_child(&child);
+            child.set_visual_parent(None);
+            child.set_layout_parent(None);
+        }
+        *this.decorator().child.borrow_mut() = value.clone();
+        let this: Rc<dyn IsView> = dyn_cast_rc(this.clone()).unwrap();
+        if let Some(child) = value {
+            child.set_layout_parent(Some(&this));
+            child.set_visual_parent(Some(&this));
+            this.add_visual_child(&child);
+        }
+        this.invalidate_measure();
     }
 
     pub fn visual_children_count_impl(this: &Rc<dyn IsView>) -> usize {
-        let this: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
-        this.panel().children.len()
+        let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
+        if this.decorator().child.borrow().is_some() { 1 } else { 0 }
     }
 
     pub fn visual_child_impl(this: &Rc<dyn IsView>, index: usize) -> Rc<dyn IsView> {
-        let this: Rc<dyn TPanel> = dyn_cast_rc(this.clone()).unwrap();
-        this.panel().children.at(index)
+        let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
+        assert_eq!(index, 0);
+        this.decorator().child.borrow().clone().unwrap()
     }
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename="Panel")]
-pub struct PanelTemplate {
+#[serde(rename="Decorator")]
+pub struct DecoratorTemplate {
     #[serde(flatten)]
     pub view: ViewTemplate,
-    pub children: Vec<Box<dyn Template>>,
+    pub child: Option<Box<dyn Template>>,
 }
 
 #[typetag::serde]
-impl Template for PanelTemplate {
-    fn create_instance(&self) -> Rc<dyn TObj> {
-        let obj = Panel::new();
+impl Template for DecoratorTemplate {
+    fn create_instance(&self) -> Rc<dyn IsObj> {
+        let obj = Decorator::new();
         obj.init();
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn TObj>) {
+    fn apply(&self, instance: &Rc<dyn IsObj>) {
         self.view.apply(instance);
-        let obj: Rc<dyn TPanel> = dyn_cast_rc(instance.clone()).unwrap();
-        for child in &self.children {
-            obj.children().push(dyn_cast_rc(child.load_content()).unwrap());
-        }
+        let obj: Rc<dyn IsDecorator> = dyn_cast_rc(instance.clone()).unwrap();
+        obj.set_child(self.child.as_ref().map(|x| dyn_cast_rc(x.load_content()).unwrap()));
     }
 }
