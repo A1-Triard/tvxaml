@@ -19,6 +19,10 @@ pub struct Decorator {
     visual_children_count: (),
     #[over]
     visual_child: (),
+    #[over]
+    measure_override: (),
+    #[over]
+    arrange_override: (),
 }
 
 impl Decorator {
@@ -63,6 +67,26 @@ impl Decorator {
         let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
         assert_eq!(index, 0);
         this.decorator().child.borrow().clone().unwrap()
+    }
+
+    pub fn measure_override_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) -> Vector {
+        let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
+        if let Some(child) = this.decorator().child.borrow().clone() {
+            child.measure(w, h);
+            child.desired_size()
+        } else {
+            Vector::null()
+        }
+    }
+
+    pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
+        let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
+        if let Some(child) = this.decorator().child.borrow().clone() {
+            child.arrange(bounds);
+            child.render_bounds().size
+        } else {
+            Vector::null()
+        }
     }
 }
 
