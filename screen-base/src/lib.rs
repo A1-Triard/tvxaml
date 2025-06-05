@@ -36,6 +36,26 @@ pub fn text_width(s: &str) -> i16 {
     s.chars().map(char_width).fold(0, |s, c| s.wrapping_add(c))
 }
 
+pub fn trim_text(mut s: &str) -> &str {
+    loop {
+        let Some(c) = s.chars().next() else { break; };
+        if c == ' ' || char_width(c) == 0 {
+            s = &s[c.len_utf8() ..];
+        } else {
+            break;
+        }
+    }
+    loop {
+        let Some(c) = s.chars().next_back() else { break; };
+        if c == ' ' || char_width(c) == 0 {
+            s = &s[.. s.len() - c.len_utf8()];
+        } else {
+            break;
+        }
+    }
+    s
+}
+
 pub fn is_text_fit_in(w: i16, s: &str) -> bool {
     let mut w = w as u16;
     for c in s.chars() {

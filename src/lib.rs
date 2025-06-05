@@ -1,5 +1,6 @@
 #![feature(iter_advance_by)]
 #![feature(macro_metavar_expr_concat)]
+#![feature(slice_from_ptr_range)]
 #![feature(trusted_len)]
 
 pub mod template;
