@@ -161,6 +161,9 @@ pub struct ViewTemplate {
     #[serde(default)]
     #[serde(skip_serializing_if="String::is_empty")]
     pub focus_tab: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub is_enabled: Option<bool>,
 }
 
 #[typetag::serde(name="View")]
@@ -197,6 +200,7 @@ impl Template for ViewTemplate {
                 Box::new(move |x| obj.set_focus_tab(Some(&dyn_cast_rc(x).unwrap())))
             );
         }
+        self.is_enabled.map(|x| obj.set_is_enabled(x));
     }
 }
 
@@ -217,6 +221,9 @@ struct ViewData {
     margin: Thickness,
     app: rc::Weak<dyn IsApp>,
     focus_tab: rc::Weak<dyn IsView>,
+    inherited_is_enabled: bool,
+    is_enabled_core: bool,
+    changing_is_enabled: bool,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -262,6 +269,14 @@ pub struct View {
     focus_tab: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
     set_focus_tab: fn(value: Option<&Rc<dyn IsView>>),
+    #[non_virt]
+    is_enabled_core: fn() -> bool,
+    #[non_virt]
+    is_enabled: fn() -> bool,
+    #[non_virt]
+    set_is_enabled: fn(value: bool),
+    #[virt]
+    is_enabled_changed: fn(),
     #[non_virt]
     desired_size: fn() -> Vector,
     #[non_virt]
@@ -323,6 +338,9 @@ impl View {
                 render_bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
                 real_render_bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
                 app: <rc::Weak::<App>>::new(),
+                inherited_is_enabled: true,
+                is_enabled_core: true,
+                changing_is_enabled: false,
             })
         }
     }
@@ -348,6 +366,50 @@ impl View {
         old.set_owner(None);
         parent.map(|x| x.invalidate_measure());
     }
+
+    pub fn is_enabled_core_impl(this: &Rc<dyn IsView>) -> bool {
+        this.view().data.borrow().is_enabled_core
+    }
+
+    pub fn is_enabled_impl(this: &Rc<dyn IsView>) -> bool {
+        let data = this.view().data.borrow();
+        data.is_enabled_core && data.inherited_is_enabled
+    }
+
+    pub fn set_is_enabled_impl(this: &Rc<dyn IsView>, value: bool) {
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.is_enabled_core == value { return; }
+            assert!(!data.changing_is_enabled);
+            data.is_enabled_core = value;
+            if !data.inherited_is_enabled { return; }
+            data.changing_is_enabled = true;
+        }
+        this.is_enabled_changed();
+        for i in 0 .. this.visual_children_count() {
+            let child = this.visual_child(i);
+            Self::update_is_enabled(&child, value);
+        }
+        this.view().data.borrow_mut().changing_is_enabled = false;
+    }
+
+    fn update_is_enabled(this: &Rc<dyn IsView>, is_enabled: bool) {
+        {
+            let mut data = this.view().data.borrow_mut();
+            assert!(!data.changing_is_enabled);
+            data.inherited_is_enabled = is_enabled;
+            if !data.is_enabled_core { return; }
+            data.changing_is_enabled = true;
+        }
+        this.is_enabled_changed();
+        for i in 0 .. this.visual_children_count() {
+            let child = this.visual_child(i);
+            Self::update_is_enabled(&child, is_enabled);
+        }
+        this.view().data.borrow_mut().changing_is_enabled = false;
+    }
+
+    pub fn is_enabled_changed_impl(_this: &Rc<dyn IsView>) { }
 
     pub fn layout_parent_impl(this: &Rc<dyn IsView>) -> Option<Rc<dyn IsView>> {
         this.view().data.borrow().layout_parent.upgrade()
@@ -563,12 +625,26 @@ impl View {
         Self::invalidate_render_raw(this, this.inner_render_bounds());
     }
 
-    pub fn add_visual_child_impl(_this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
+    pub fn add_visual_child_impl(this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
         child.invalidate_render();
+        let is_enabled = {
+            let data = this.view().data.borrow();
+            data.is_enabled_core && data.inherited_is_enabled
+        };
+        if !is_enabled {
+            Self::update_is_enabled(child, false);
+        }
     }
 
-    pub fn remove_visual_child_impl(_this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
+    pub fn remove_visual_child_impl(this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
         child.invalidate_render();
+        let is_enabled = {
+            let data = this.view().data.borrow();
+            data.is_enabled_core && data.inherited_is_enabled
+        };
+        if !is_enabled {
+            Self::update_is_enabled(child, true);
+        }
     }
 
     pub fn visual_children_count_impl(_this: &Rc<dyn IsView>) -> usize {
