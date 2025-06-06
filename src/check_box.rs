@@ -3,7 +3,7 @@ use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
 use crate::render_port::label_width;
-use crate::template::{Template, Names};
+use crate::template::{Template, NameResolver};
 
 import! { pub check_box:
     use [view crate::view];
@@ -193,7 +193,7 @@ impl Template for CheckBoxTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
         self.view.apply(instance, names);
         let obj: Rc<dyn IsCheckBox> = dyn_cast_rc(instance.clone()).unwrap();
         self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));

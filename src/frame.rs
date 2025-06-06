@@ -3,7 +3,7 @@ use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
 use tvxaml_screen_base::text_width;
-use crate::template::{Template, Names};
+use crate::template::{Template, NameResolver};
 
 import! { pub frame:
     use [decorator crate::decorator];
@@ -195,7 +195,7 @@ impl Template for FrameTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
         self.decorator.apply(instance, names);
         let obj: Rc<dyn IsFrame> = dyn_cast_rc(instance.clone()).unwrap();
         self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));

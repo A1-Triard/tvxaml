@@ -3,40 +3,53 @@ use hashbrown::HashMap;
 use std::rc::Rc;
 
 pub struct Names {
-    names: HashMap<String, Rc<dyn IsObj>>,
-    clients: Option<Vec<(String, Box<dyn FnOnce(Rc<dyn IsObj>)>)>>,
+    map: HashMap<String, Rc<dyn IsObj>>,
 }
 
 impl Names {
     fn new() -> Self {
-        Names {
-            names: HashMap::new(),
-            clients: Some(Vec::new()),
+        Names { map: HashMap::new() }
+    }
+
+    fn register(&mut self, name: &str, obj: Rc<dyn IsObj>) {
+        if self.map.insert(name.to_string(), obj).is_some() {
+            eprintln!("Warning: conflicting names ('{name}')");
         }
     }
 
-    fn register(&mut self, name: &String, obj: Rc<dyn IsObj>) {
-        if self.names.insert(name.clone(), obj).is_some() {
-            eprintln!("Warning: conflicting names ('{name}')");
+    pub fn find(&self, name: &str) -> Option<&Rc<dyn IsObj>> {
+        self.map.get(name)
+    }
+}
+
+pub struct NameResolver {
+    names: Names,
+    clients: Vec<(String, Box<dyn FnOnce(Rc<dyn IsObj>)>)>,
+}
+
+impl NameResolver {
+    fn new() -> Self {
+        NameResolver {
+            names: Names::new(),
+            clients: Vec::new(),
         }
     }
 
     pub fn resolve(&mut self, name: String, client: Box<dyn FnOnce(Rc<dyn IsObj>)>) {
         if !name.is_empty() {
-            self.clients.as_mut().unwrap().push((name, client));
+            self.clients.push((name, client));
         }
     }
-}
 
-impl Drop for Names {
-    fn drop(&mut self) {
-        for (name, client) in self.clients.take().unwrap() {
-            let Some(named_obj) = self.names.get(&name) else {
+    fn finish(self) -> Names {
+        for (name, client) in self.clients {
+            let Some(named_obj) = self.names.map.get(&name) else {
                 eprintln!("Warning: name not found ('{name}')");
                 continue;
             };
             client(named_obj.clone())
         }
+        self.names
     }
 }
 
@@ -52,20 +65,24 @@ pub trait Template {
 
     fn create_instance(&self) -> Rc<dyn IsObj>;
 
-    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names);
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver);
 
-    fn load_content(&self, names: &mut Names) -> Rc<dyn IsObj> {
-        let mut local_names = if self.is_name_scope() { Some(Names::new()) } else { None };
+    fn load_content(&self, names: &mut NameResolver) -> Rc<dyn IsObj> {
+        let mut local_names = if self.is_name_scope() { Some(NameResolver::new()) } else { None };
         let names = local_names.as_mut().unwrap_or(names);
         let instance = self.create_instance();
         if let Some(name) = self.name() && !name.is_empty() {
-            names.register(name, instance.clone());
+            names.names.register(name, instance.clone());
         }
         self.apply(&instance, names);
+        local_names.map(|x| x.finish());
         instance
     }
 
-    fn load_root(&self) -> Rc<dyn IsObj> {
-        self.load_content(&mut Names::new())
+    fn load_root(&self) -> (Rc<dyn IsObj>, Names) {
+        let mut name_resolver = NameResolver::new();
+        let root = self.load_content(&mut name_resolver);
+        let names = name_resolver.finish();
+        (root, names)
     }
 }

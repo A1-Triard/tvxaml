@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::cell::Cell;
-use crate::template::{Template, Names};
+use crate::template::{Template, NameResolver};
 use crate::view_vec::ViewVecExt;
 
 import! { pub dock_layout:
@@ -93,7 +93,7 @@ impl Template for DockLayoutTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
         self.layout.apply(instance, names);
         let obj: Rc<dyn IsDockLayout> = dyn_cast_rc(instance.clone()).unwrap();
         self.dock.map(|x| obj.set_dock(x));
@@ -281,7 +281,7 @@ impl Template for DockPanelTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
         self.panel.apply(instance, names);
     }
 }

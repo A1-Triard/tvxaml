@@ -5,7 +5,7 @@ use std::cmp::min;
 use std::mem::replace;
 use std::rc::{self};
 use std::cell::RefCell;
-use crate::template::{Template, Names};
+use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
 use crate::obj_col::{ObjCol, ObjColExt};
 
@@ -24,7 +24,7 @@ impl Template for LayoutTemplate {
         dyn_cast_rc(Layout::new()).unwrap()
     }
 
-    fn apply(&self, _instance: &Rc<dyn IsObj>, _names: &mut Names) { }
+    fn apply(&self, _instance: &Rc<dyn IsObj>, _names: &mut NameResolver) { }
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -182,7 +182,7 @@ impl Template for ViewTemplate {
         dyn_cast_rc(obj).unwrap()
     }
 
-    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut Names) {
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
         let obj: Rc<dyn IsView> = dyn_cast_rc(instance.clone()).unwrap();
         for resource in &self.resources {
             obj.resources().insert(resource.load_content(names));
