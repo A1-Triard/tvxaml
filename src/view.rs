@@ -3,6 +3,7 @@ use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::cmp::min;
 use std::mem::replace;
+use std::ptr::addr_eq;
 use std::rc::{self};
 use std::cell::RefCell;
 use crate::template::{Template, NameResolver};
@@ -224,6 +225,8 @@ struct ViewData {
     inherited_is_enabled: bool,
     is_enabled_core: bool,
     changing_is_enabled: bool,
+    is_focused_primary: bool,
+    is_focused_secondary: bool,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -311,6 +314,16 @@ pub struct View {
     visual_child: fn(index: usize) -> Rc<dyn IsView>,
     #[virt]
     render: fn(rp: &mut RenderPort),
+    #[virt]
+    is_focused_changed: fn(primary_focus: bool),
+    #[non_virt]
+    is_focused: fn(primary_focus: Option<bool>) -> bool,
+    #[non_virt]
+    _set_is_focused: fn(primary_focus: bool, value: bool),
+    #[non_virt]
+    root: fn() -> Rc<dyn IsView>,
+    #[non_virt]
+    is_visual_ancestor_of: fn(descendant: Rc<dyn IsView>) -> bool,
 }
 
 impl View {
@@ -341,6 +354,8 @@ impl View {
                 inherited_is_enabled: true,
                 is_enabled_core: true,
                 changing_is_enabled: false,
+                is_focused_primary: false,
+                is_focused_secondary: false,
             })
         }
     }
@@ -603,6 +618,12 @@ impl View {
 
     pub fn set_app_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsApp>>) {
         let set = value.is_some();
+        if !set {
+            if let Some(old_app) = this.view().data.borrow().app.upgrade() {
+                old_app.focus(None, true);
+                old_app.focus(None, false);
+            }
+        }
         let app = &mut this.view().data.borrow_mut().app;
         let old_app = replace(app, value.map_or_else(|| <rc::Weak::<App>>::new(), Rc::downgrade));
         if set && old_app.upgrade().is_some() {
@@ -636,7 +657,32 @@ impl View {
         }
     }
 
+    pub fn is_visual_ancestor_of_impl(this: &Rc<dyn IsView>, mut descendant: Rc<dyn IsView>) -> bool {
+        loop {
+            if addr_eq(Rc::as_ptr(&descendant), Rc::as_ptr(this)) {
+                return true;
+            }
+            if let Some(parent) = descendant.visual_parent() {
+                descendant = parent;
+            } else {
+                return false;
+            }
+        }
+    }
+
     pub fn remove_visual_child_impl(this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
+        if let Some(app) = this.root().app() {
+            if let Some(focused) = app.focused(true) {
+                if child.is_visual_ancestor_of(focused) {
+                    app.focus(None, true);
+                }
+            }
+            if let Some(focused) = app.focused(false) {
+                if child.is_visual_ancestor_of(focused) {
+                    app.focus(None, false);
+                }
+            }
+        }
         child.invalidate_render();
         let is_enabled = {
             let data = this.view().data.borrow();
@@ -656,4 +702,39 @@ impl View {
     }
 
     pub fn render_impl(_this: &Rc<dyn IsView>, _rp: &mut RenderPort) { }
+
+    pub fn is_focused_changed_impl(_this: &Rc<dyn IsView>, _primary_focus: bool) { }
+
+    pub fn is_focused_impl(this: &Rc<dyn IsView>, primary_focus: Option<bool>) -> bool {
+        let data = this.view().data.borrow();
+        match primary_focus {
+            Some(true) => data.is_focused_primary,
+            Some(false) => data.is_focused_secondary,
+            None => data.is_focused_primary || data.is_focused_secondary,
+        }
+    }
+
+    pub fn _set_is_focused_impl(this: &Rc<dyn IsView>, primary_focus: bool, value: bool) {
+        {
+            let mut data = this.view().data.borrow_mut();
+            if primary_focus {
+                data.is_focused_primary = value;
+            } else {
+                data.is_focused_secondary = value;
+            }
+        }
+        this.is_focused_changed(primary_focus);
+    }
+
+    pub fn root_impl(this: &Rc<dyn IsView>) -> Rc<dyn IsView> {
+        let mut root = this.clone();
+        loop {
+            if let Some(parent) = root.visual_parent() {
+                root = parent;
+            } else {
+                break;
+            }
+        }
+        root
+    }
 }

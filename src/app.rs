@@ -1,9 +1,19 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use int_vec_2d::{Vector, Point};
 use std::cell::{Cell, RefCell};
+use std::mem::replace;
+use std::ptr::addr_eq;
+use std::rc::{self};
 use tvxaml_screen_base::Screen;
 use crate::render_port::RenderPort;
-use crate::view::ViewExt;
+use crate::view::{View, ViewExt};
+
+fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where T: ?Sized, U: ?Sized {
+    if p.is_none() && q.is_none() { return true; }
+    let Some(p) = p else { return false; };
+    let Some(q) = q else { return false; };
+    addr_eq(p, q)
+}
 
 import! { pub app:
     use [obj basic_oop::obj];
@@ -13,6 +23,12 @@ import! { pub app:
     use crate::view::IsView;
 }
 
+struct Focus {
+    changing: bool,
+    primary: rc::Weak<dyn IsView>,
+    secondary: rc::Weak<dyn IsView>,
+}
+
 #[class_unsafe(inherits_Obj)]
 pub struct App {
     screen: RefCell<Box<dyn Screen>>,
@@ -20,6 +36,7 @@ pub struct App {
     exit_code: Cell<Option<u8>>,
     root: Rc<dyn IsView>,
     invalidated_rect: Cell<Rect>,
+    focus: RefCell<Focus>,
     #[non_virt]
     root: fn() -> Rc<dyn IsView>,
     #[non_virt]
@@ -30,6 +47,10 @@ pub struct App {
     quit: fn(),
     #[non_virt]
     invalidate_render: fn(rect: Rect),
+    #[non_virt]
+    focus: fn(view: Option<&Rc<dyn IsView>>, primary_focus: bool),
+    #[non_virt]
+    focused: fn(primary_focus: bool) -> Option<Rc<dyn IsView>>,
 }
 
 impl App {
@@ -45,6 +66,11 @@ impl App {
             exit_code: Cell::new(None),
             root,
             invalidated_rect: Cell::new(Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() }),
+            focus: RefCell::new(Focus {
+                changing: false,
+                primary: <rc::Weak::<View>>::new(),
+                secondary: <rc::Weak::<View>>::new(),
+            }),
         }
     }
 
@@ -109,5 +135,43 @@ impl App {
         let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
         let union = this.app().invalidated_rect.get().union_intersect(rect, app_rect);
         this.app().invalidated_rect.set(union);
+    }
+
+    pub fn focused_impl(this: &Rc<dyn IsApp>, primary_focus: bool) -> Option<Rc<dyn IsView>> {
+        let focus = this.app().focus.borrow();
+        if primary_focus {
+            focus.primary.upgrade()
+        } else {
+            focus.secondary.upgrade()
+        }
+    }
+
+    pub fn focus_impl(this: &Rc<dyn IsApp>, view: Option<&Rc<dyn IsView>>, primary_focus: bool) {
+        view.map(|x| assert!(option_addr_eq(x.root().app().map(|x| Rc::as_ptr(&x)), Some(Rc::as_ptr(this)))));
+        let prev = {
+            let mut focus = this.app().focus.borrow_mut();
+            assert!(!focus.changing);
+            focus.changing = true;
+            if primary_focus {
+                replace(&mut focus.primary, <rc::Weak::<View>>::new())
+            } else {
+                replace(&mut focus.secondary, <rc::Weak::<View>>::new())
+            }.upgrade()
+        };
+        if let Some(prev) = prev {
+            prev._set_is_focused(primary_focus, false);
+        }
+        {
+            let mut focus = this.app().focus.borrow_mut();
+            if primary_focus {
+                focus.primary = view.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+            } else {
+                focus.secondary = view.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+            };
+        }
+        if let Some(next) = view {
+            next._set_is_focused(primary_focus, true);
+        }
+        this.app().focus.borrow_mut().changing = false;
     }
 }
