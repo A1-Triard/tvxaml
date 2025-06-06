@@ -99,3 +99,36 @@ impl<'a> RenderPort<'a> {
         self.text(p, color, if double { "╝" } else { "┘" });
     }
 }
+
+pub fn label_width(text: &str) -> i16 {
+    let mut width = 0i16;
+    let mut hotkey = false;
+    for (first, last, text) in text.split('~').identify_first_last() {
+        if !first && !text.is_empty() {
+            hotkey = !hotkey;
+        }
+        let actual_text = if !first && !last && text.is_empty() { "~" } else { text };
+        width = width.wrapping_add(text_width(actual_text));
+        if !first && text.is_empty() {
+            hotkey = !hotkey;
+        }
+    }
+    width
+}
+
+pub fn label(text: &str) -> Option<char> {
+    let mut hotkey = false;
+    for (first, last, text) in text.split('~').identify_first_last() {
+        if !first && !text.is_empty() {
+            hotkey = !hotkey;
+        }
+        let actual_text = if !first && !last && text.is_empty() { "~" } else { text };
+        if hotkey && !actual_text.is_empty() {
+            return Some(actual_text.chars().next().unwrap().to_lowercase().next().unwrap());
+        }
+        if !first && text.is_empty() {
+            hotkey = !hotkey;
+        }
+    }
+    None
+}
