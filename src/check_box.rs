@@ -49,6 +49,8 @@ pub struct CheckBox {
     arrange_override: (),
     #[over]
     render: (),
+    #[over]
+    is_focused_changed: (),
 }
 
 impl CheckBox {
@@ -142,6 +144,7 @@ impl CheckBox {
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
         let is_enabled = this.is_enabled();
+        let focused = this.is_focused(Some(true));
         let this: Rc<dyn IsCheckBox> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.check_box().data.borrow();
         let color = if is_enabled { data.color } else { data.color_disabled };
@@ -151,6 +154,14 @@ impl CheckBox {
         if !data.text.is_empty() {
             rp.text(Point { x: 3, y: 0 }, color, " ");
             rp.label(Point { x: 4, y: 0 }, color, data.color_hotkey, &data.text);
+        }
+        if focused { rp.cursor(Point { x: 1, y: 0 }); }
+    }
+
+    pub fn is_focused_changed_impl(this: &Rc<dyn IsView>, primary_focus: bool) {
+        View::is_focused_changed_impl(this, primary_focus);
+        if primary_focus {
+            this.invalidate_render();
         }
     }
 }
