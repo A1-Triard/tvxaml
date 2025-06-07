@@ -596,62 +596,66 @@ impl<'de> Deserializer<'de> for TextDeserializer {
         panic!("not supported")
     }
 
-    fn deserialize_bool<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        match self.text.as_str() {
+            "True" => visitor.visit_bool(true),
+            "False" => visitor.visit_bool(false),
+            _ => Err(Error::Custom("invalid bool".to_string())),
+        }
     }
 
-    fn deserialize_i8<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_i8(visitor)
     }
 
-    fn deserialize_i16<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_i16(visitor)
     }
 
-    fn deserialize_i32<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_i32(visitor)
     }
 
-    fn deserialize_i64<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_i64(visitor)
     }
 
-    fn deserialize_f32<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_f32(visitor)
     }
 
-    fn deserialize_f64<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_f64(visitor)
     }
 
-    fn deserialize_u8<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_u8(visitor)
     }
 
-    fn deserialize_u16<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_u16(visitor)
     }
 
-    fn deserialize_u32<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_u32(visitor)
     }
 
-    fn deserialize_u64<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_u64(visitor)
     }
 
     serde_if_integer128! {
-        fn deserialize_i128<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-            panic!("not supported")
+        fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+            self.text.into_deserializer().deserialize_i128(visitor)
         }
 
-        fn deserialize_u128<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-            panic!("not supported")
+        fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+            self.text.into_deserializer().deserialize_u128(visitor)
         }
     }
 
-    fn deserialize_char<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        self.text.into_deserializer().deserialize_char(visitor)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
@@ -717,8 +721,8 @@ impl<'de> Deserializer<'de> for TextDeserializer {
     }
 
     fn deserialize_enum<V>(
-        self, _: &'static str, _: &'static [&'static str], _: V
+        self, name: &'static str, variants: &'static [&'static str], visitor: V
     ) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+        self.text.into_deserializer().deserialize_enum(name, variants, visitor)
     }
 }

@@ -114,13 +114,11 @@ impl Frame {
 
     pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
         let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
-        let child_bounds = Thickness::all(1).shrink_rect(bounds);
         if let Some(child) = this.child() {
+            let child_bounds = Thickness::all(1).shrink_rect(bounds);
             child.arrange(child_bounds);
-            Thickness::all(1).expand_rect_size(child.render_bounds().size)
-        } else {
-            bounds.size
         }
+        bounds.size
     }
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
