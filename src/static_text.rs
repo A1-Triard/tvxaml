@@ -1,6 +1,6 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
 use crate::template::{Template, NameResolver};
 
@@ -20,6 +20,7 @@ mod text_renderer {
     #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
     #[derive(Serialize, Deserialize)]
     pub enum TextWrapping {
+        NoWrap,
         Wrap,
         WrapWithOverflow,
     }
@@ -28,7 +29,7 @@ mod text_renderer {
         mut r: impl FnMut(Point, &str),
         bounds: Rect,
         align: Option<HAlign>,
-        wrapping: Option<TextWrapping>,
+        wrapping: TextWrapping,
         text: &str,
     ) -> Rect {
         let mut rendered = Rect { tl: bounds.tl, size: Vector::null() };
@@ -46,13 +47,13 @@ mod text_renderer {
         mut r: impl FnMut(Point, &str),
         bounds: Rect,
         align: Option<HAlign>,
-        wrapping: Option<TextWrapping>,
+        wrapping: TextWrapping,
         text: &str,
     ) -> Rect {
         if text.is_empty() {
             return Rect { tl: bounds.tl, size: Vector { x: 0, y: 1 } };
         }
-        if let Some(wrapping) = wrapping {
+        if wrapping != TextWrapping::NoWrap {
             let words = split_words(text);
             let runs = words.identify_first().map(|(f, x)| (!f, x, text_width(x))).flat_map(|(s, x, w)| {
                 if wrapping == TextWrapping::WrapWithOverflow || w as u16 <= bounds.w() as u16 {
@@ -250,8 +251,8 @@ pub use text_renderer::TextWrapping;
 
 struct StaticTextData {
     text: Rc<String>,
-    text_align: Option<HAlign>,
-    text_wrapping: Option<TextWrapping>,
+    text_align: TextAlign,
+    text_wrapping: TextWrapping,
     color: (Fg, Bg),
 }
 
@@ -263,13 +264,13 @@ pub struct StaticText {
     #[non_virt]
     set_text: fn(value: Rc<String>),
     #[non_virt]
-    text_align: fn() -> Option<HAlign>,
+    text_align: fn() -> TextAlign,
     #[non_virt]
-    set_text_align: fn(value: Option<HAlign>),
+    set_text_align: fn(value: TextAlign),
     #[non_virt]
-    text_wrapping: fn() -> Option<TextWrapping>,
+    text_wrapping: fn() -> TextWrapping,
     #[non_virt]
-    set_text_wrapping: fn(value: Option<TextWrapping>),
+    set_text_wrapping: fn(value: TextWrapping),
     #[non_virt]
     color: fn() -> (Fg, Bg),
     #[non_virt]
@@ -292,8 +293,8 @@ impl StaticText {
             view: unsafe { View::new_raw(vtable) },
             data: RefCell::new(StaticTextData {
                 text: Rc::new(String::new()),
-                text_align: Some(HAlign::Left),
-                text_wrapping: None,
+                text_align: TextAlign::Left,
+                text_wrapping: TextWrapping::NoWrap,
                 color: (Fg::White, Bg::Blue),
             }),
         }
@@ -309,20 +310,20 @@ impl StaticText {
         this.invalidate_render();
     }
 
-    pub fn text_align_impl(this: &Rc<dyn IsStaticText>) -> Option<HAlign> {
+    pub fn text_align_impl(this: &Rc<dyn IsStaticText>) -> TextAlign {
         this.static_text().data.borrow().text_align
     }
 
-    pub fn set_text_align_impl(this: &Rc<dyn IsStaticText>, value: Option<HAlign>) {
+    pub fn set_text_align_impl(this: &Rc<dyn IsStaticText>, value: TextAlign) {
         this.static_text().data.borrow_mut().text_align = value;
         this.invalidate_render();
     }
 
-    pub fn text_wrapping_impl(this: &Rc<dyn IsStaticText>) -> Option<TextWrapping> {
+    pub fn text_wrapping_impl(this: &Rc<dyn IsStaticText>) -> TextWrapping {
         this.static_text().data.borrow().text_wrapping
     }
 
-    pub fn set_text_wrapping_impl(this: &Rc<dyn IsStaticText>, value: Option<TextWrapping>) {
+    pub fn set_text_wrapping_impl(this: &Rc<dyn IsStaticText>, value: TextWrapping) {
         this.static_text().data.borrow_mut().text_wrapping = value;
         this.invalidate_measure();
         this.invalidate_render();
@@ -343,7 +344,7 @@ impl StaticText {
         render_text(
             |_, _| { },
             Rect { tl: Point { x: 0, y: 0 }, size: Vector { x: w.unwrap_or(-1), y: h.unwrap_or(-1) } },
-            data.text_align,
+            data.text_align.into(),
             data.text_wrapping,
             &data.text
         ).size
@@ -361,7 +362,7 @@ impl StaticText {
         render_text(
             |p, s| rp.text(p, data.color, s),
             bounds,
-            data.text_align,
+            data.text_align.into(),
             data.text_wrapping,
             &data.text
         );
@@ -370,91 +371,96 @@ impl StaticText {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[derive(Serialize, Deserialize)]
-enum TextAlign { Left, Center, Right, Justify }
+pub enum TextAlign { Left, Center, Right, Justify }
 
-fn serialize_text_align<S>(value: &Option<Option<HAlign>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
-    let surrogate = match value {
-        Some(Some(HAlign::Left)) => Some(TextAlign::Left),
-        Some(Some(HAlign::Center)) => Some(TextAlign::Center),
-        Some(Some(HAlign::Right)) => Some(TextAlign::Right),
-        Some(None) => Some(TextAlign::Justify),
-        None => None,
+impl From<Option<HAlign>> for TextAlign {
+    fn from(value: Option<HAlign>) -> Self {
+        match value {
+            Some(HAlign::Left) => TextAlign::Left,
+            Some(HAlign::Center) => TextAlign::Center,
+            Some(HAlign::Right) => TextAlign::Right,
+            None => TextAlign::Justify,
+        }
+    }
+}
+
+impl From<TextAlign> for Option<HAlign> {
+    fn from(value: TextAlign) -> Self {
+        match value {
+            TextAlign::Left => Some(HAlign::Left),
+            TextAlign::Center => Some(HAlign::Center),
+            TextAlign::Right => Some(HAlign::Right),
+            TextAlign::Justify => None,
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! static_text_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::view_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text: Option<String>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text_align: Option<$crate::static_text::TextAlign>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text_wrapping: Option<$crate::static_text::TextWrapping>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
     };
-    surrogate.serialize(s)
 }
+ 
+#[macro_export]
+macro_rules! static_text_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::view_apply_template!($this, $instance, $names);
+        {
+            use $crate::static_text::StaticTextExt;
 
-fn deserialize_text_align<'de, D>(d: D) -> Result<Option<Option<HAlign>>, D::Error> where D: Deserializer<'de> {
-    let surrogate: Option<TextAlign> = Deserialize::deserialize(d)?;
-    Ok(match surrogate {
-        Some(TextAlign::Left) => Some(Some(HAlign::Left)),
-        Some(TextAlign::Center) => Some(Some(HAlign::Center)),
-        Some(TextAlign::Right) => Some(Some(HAlign::Right)),
-        Some(TextAlign::Justify) => Some(None),
-        None => None,
-    })
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[derive(Serialize, Deserialize)]
-#[serde(rename="TextWrapping")]
-enum TextWrappingSurrogate { Wrap, WrapWithOverflow, NoWrap }
-
-fn serialize_text_wrapping<S>(
-    value: &Option<Option<TextWrapping>>,
-    s: S
-) -> Result<S::Ok, S::Error> where S: Serializer {
-    let surrogate = match value {
-        Some(Some(TextWrapping::Wrap)) => Some(TextWrappingSurrogate::Wrap),
-        Some(Some(TextWrapping::WrapWithOverflow)) => Some(TextWrappingSurrogate::WrapWithOverflow),
-        Some(None) => Some(TextWrappingSurrogate::NoWrap),
-        None => None,
+            let obj: $crate::alloc_rc_Rc<dyn $crate::static_text::IsStaticText>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.text.as_ref().map(|x| obj.set_text($crate::alloc_rc_Rc::new(x.clone())));
+            $this.text_align.map(|x| obj.set_text_align(x));
+            $this.text_wrapping.map(|x| obj.set_text_wrapping(x));
+            $this.color.map(|x| obj.set_color(x));
+        }
     };
-    surrogate.serialize(s)
 }
 
-fn deserialize_text_wrapping<'de, D>(
-    d: D
-) -> Result<Option<Option<TextWrapping>>, D::Error> where D: Deserializer<'de> {
-    let surrogate: Option<TextWrappingSurrogate> = Deserialize::deserialize(d)?;
-    Ok(match surrogate {
-        Some(TextWrappingSurrogate::Wrap) => Some(Some(TextWrapping::Wrap)),
-        Some(TextWrappingSurrogate::WrapWithOverflow) => Some(Some(TextWrapping::WrapWithOverflow)),
-        Some(TextWrappingSurrogate::NoWrap) => Some(None),
-        None => None,
-    })
-}
-
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="StaticText")]
-pub struct StaticTextTemplate {
-    #[serde(flatten)]
-    pub view: ViewTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub text: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    #[serde(serialize_with="serialize_text_align")]
-    #[serde(deserialize_with="deserialize_text_align")]
-    pub text_align: Option<Option<HAlign>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    #[serde(serialize_with="serialize_text_wrapping")]
-    #[serde(deserialize_with="deserialize_text_wrapping")]
-    pub text_wrapping: Option<Option<TextWrapping>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub color: Option<(Fg, Bg)>,
+static_text_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="StaticText")]
+    pub struct StaticTextTemplate { }
 }
 
 #[typetag::serde(name="StaticText")]
 impl Template for StaticTextTemplate {
     fn is_name_scope(&self) -> bool {
-        self.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -464,11 +470,7 @@ impl Template for StaticTextTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.view.apply(instance, names);
-        let obj: Rc<dyn IsStaticText> = dyn_cast_rc(instance.clone()).unwrap();
-        self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));
-        self.text_align.map(|x| obj.set_text_align(x));
-        self.text_wrapping.map(|x| obj.set_text_wrapping(x));
-        self.color.map(|x| obj.set_color(x));
+        let this = self;
+        static_text_apply_template!(this, instance, names);
     }
 }

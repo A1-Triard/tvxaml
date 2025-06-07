@@ -1,6 +1,6 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Serialize, Deserialize};
 use std::cmp::min;
 use std::mem::replace;
 use std::ptr::addr_eq;
@@ -8,16 +8,48 @@ use std::rc::{self};
 use std::cell::RefCell;
 use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
-use crate::obj_col::{ObjCol, ObjColExt};
+use crate::obj_col::ObjCol;
 
 import! { pub layout:
     use [obj basic_oop::obj];
     use std::rc::Rc;
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="Layout")]
-pub struct LayoutTemplate { }
+#[macro_export]
+macro_rules! layout_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $(#[$attr])*
+        $vis struct $name {
+            $($(
+                $(#[$field_attr])*
+                $field_vis $field_name : $field_ty
+            ),+)?
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! layout_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        let _ = $this;
+        let _ = $instance;
+        let _ = $names;
+    };
+}
+
+layout_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="Layout")]
+    pub struct LayoutTemplate { }
+}
 
 #[typetag::serde(name="Layout")]
 impl Template for LayoutTemplate {
@@ -25,7 +57,10 @@ impl Template for LayoutTemplate {
         dyn_cast_rc(Layout::new()).unwrap()
     }
 
-    fn apply(&self, _instance: &Rc<dyn IsObj>, _names: &mut NameResolver) { }
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
+        let this = self;
+        layout_apply_template!(this, instance, names);
+    }
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -67,104 +102,153 @@ import! { pub view:
     use crate::render_port::RenderPort;
 }
 
-fn is_false(value: &bool) -> bool {
-    !value
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize)]
+pub enum ViewHAlign { Left, Center, Right, Stretch }
+
+impl From<ViewHAlign> for Option<HAlign> {
+    fn from(a: ViewHAlign) -> Option<HAlign> {
+        match a {
+            ViewHAlign::Left => Some(HAlign::Left),
+            ViewHAlign::Center => Some(HAlign::Center),
+            ViewHAlign::Right => Some(HAlign::Right),
+            ViewHAlign::Stretch => None,
+        }
+    }
+}
+
+impl From<Option<HAlign>> for ViewHAlign {
+    fn from(a: Option<HAlign>) -> ViewHAlign {
+        match a {
+            Some(HAlign::Left) => ViewHAlign::Left,
+            Some(HAlign::Center) => ViewHAlign::Center,
+            Some(HAlign::Right) => ViewHAlign::Right,
+            None => ViewHAlign::Stretch,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[derive(Serialize, Deserialize)]
-#[serde(rename="HAlign")]
-enum HAlignSurrogate { Left, Center, Right, Stretch }
+pub enum ViewVAlign { Top, Center, Bottom, Stretch }
 
-fn serialize_h_align<S>(value: &Option<Option<HAlign>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
-    let surrogate = match value {
-        Some(Some(HAlign::Left)) => Some(HAlignSurrogate::Left),
-        Some(Some(HAlign::Center)) => Some(HAlignSurrogate::Center),
-        Some(Some(HAlign::Right)) => Some(HAlignSurrogate::Right),
-        Some(None) => Some(HAlignSurrogate::Stretch),
-        None => None,
+impl From<ViewVAlign> for Option<VAlign> {
+    fn from(a: ViewVAlign) -> Option<VAlign> {
+        match a {
+            ViewVAlign::Top => Some(VAlign::Top),
+            ViewVAlign::Center => Some(VAlign::Center),
+            ViewVAlign::Bottom => Some(VAlign::Bottom),
+            ViewVAlign::Stretch => None,
+        }
+    }
+}
+
+impl From<Option<VAlign>> for ViewVAlign {
+    fn from(a: Option<VAlign>) -> ViewVAlign {
+        match a {
+            Some(VAlign::Top) => ViewVAlign::Top,
+            Some(VAlign::Center) => ViewVAlign::Center,
+            Some(VAlign::Bottom) => ViewVAlign::Bottom,
+            None => ViewVAlign::Stretch,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn is_false(b: &bool) -> bool { !b }
+
+#[macro_export]
+macro_rules! view_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        use $crate::view::is_false as tvxaml_view_is_false;
+
+        $(#[$attr])*
+        $vis struct $name {
+            #[serde(default)]
+            #[serde(skip_serializing_if="tvxaml_view_is_false")]
+            pub is_name_scope: bool,
+            #[serde(default)]
+            #[serde(skip_serializing_if="String::is_empty")]
+            pub name: String,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Vec::is_empty")]
+            pub resources: Vec<Box<dyn $crate::template::Template>>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub layout: Option<Box<dyn $crate::template::Template>>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub min_size: Option<$crate::int_vec_2d_Vector>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub max_size: Option<$crate::int_vec_2d_Vector>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub h_align: Option<$crate::view::ViewHAlign>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub v_align: Option<$crate::view::ViewVAlign>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub margin: Option<$crate::int_vec_2d_Thickness>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="String::is_empty")]
+            pub focus_tab: String,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            pub is_enabled: Option<bool>,
+            $($(
+                $(#[$field_attr])*
+                $field_vis $field_name : $field_ty
+            ),+)?
+        }
     };
-    surrogate.serialize(s)
 }
 
-fn deserialize_h_align<'de, D>(d: D) -> Result<Option<Option<HAlign>>, D::Error> where D: Deserializer<'de> {
-    let surrogate: Option<HAlignSurrogate> = Deserialize::deserialize(d)?;
-    Ok(match surrogate {
-        Some(HAlignSurrogate::Left) => Some(Some(HAlign::Left)),
-        Some(HAlignSurrogate::Center) => Some(Some(HAlign::Center)),
-        Some(HAlignSurrogate::Right) => Some(Some(HAlign::Right)),
-        Some(HAlignSurrogate::Stretch) => Some(None),
-        None => None,
-    })
-}
+#[macro_export]
+macro_rules! view_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        {
+            use $crate::obj_col::ObjColExt;
+            use $crate::view::ViewExt;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[derive(Serialize, Deserialize)]
-#[serde(rename="VAlign")]
-enum VAlignSurrogate { Top, Center, Bottom, Stretch }
-
-fn serialize_v_align<S>(value: &Option<Option<VAlign>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
-    let surrogate = match value {
-        Some(Some(VAlign::Top)) => Some(VAlignSurrogate::Top),
-        Some(Some(VAlign::Center)) => Some(VAlignSurrogate::Center),
-        Some(Some(VAlign::Bottom)) => Some(VAlignSurrogate::Bottom),
-        Some(None) => Some(VAlignSurrogate::Stretch),
-        None => None,
+            let obj: $crate::alloc_rc_Rc<dyn $crate::view::IsView>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            for resource in &$this.resources {
+                obj.resources().insert(resource.load_content($names));
+            }
+            $this.layout.as_ref().map(|x|
+                obj.set_layout($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap())
+            );
+            $this.min_size.map(|x| obj.set_min_size(x));
+            $this.max_size.map(|x| obj.set_max_size(x));
+            $this.h_align.map(|x| obj.set_h_align(x));
+            $this.v_align.map(|x| obj.set_v_align(x));
+            $this.margin.map(|x| obj.set_margin(x)); 
+            {
+                let obj = obj.clone();
+                $names.resolve(
+                    $this.focus_tab.clone(),
+                    Box::new(move |x| obj.set_focus_tab(Some(&$crate::dynamic_cast_dyn_cast_rc(x).unwrap())))
+                );
+            }
+            $this.is_enabled.map(|x| obj.set_is_enabled(x));
+        }
     };
-    surrogate.serialize(s)
 }
 
-fn deserialize_v_align<'de, D>(d: D) -> Result<Option<Option<VAlign>>, D::Error> where D: Deserializer<'de> {
-    let surrogate: Option<VAlignSurrogate> = Deserialize::deserialize(d)?;
-    Ok(match surrogate {
-        Some(VAlignSurrogate::Top) => Some(Some(VAlign::Top)),
-        Some(VAlignSurrogate::Center) => Some(Some(VAlign::Center)),
-        Some(VAlignSurrogate::Bottom) => Some(Some(VAlign::Bottom)),
-        Some(VAlignSurrogate::Stretch) => Some(None),
-        None => None,
-    })
-}
-
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="View")]
-pub struct ViewTemplate {
-    #[serde(default)]
-    #[serde(skip_serializing_if="is_false")]
-    pub is_name_scope: bool,
-    #[serde(default)]
-    #[serde(skip_serializing_if="String::is_empty")]
-    pub name: String,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Vec::is_empty")]
-    pub resources: Vec<Box<dyn Template>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub layout: Option<Box<dyn Template>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub min_size: Option<Vector>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub max_size: Option<Vector>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    #[serde(serialize_with="serialize_h_align")]
-    #[serde(deserialize_with="deserialize_h_align")]
-    pub h_align: Option<Option<HAlign>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    #[serde(serialize_with="serialize_v_align")]
-    #[serde(deserialize_with="deserialize_v_align")]
-    pub v_align: Option<Option<VAlign>>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub margin: Option<Thickness>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="String::is_empty")]
-    pub focus_tab: String,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub is_enabled: Option<bool>,
+view_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="View")]
+    pub struct ViewTemplate { }
 }
 
 #[typetag::serde(name="View")]
@@ -184,24 +268,8 @@ impl Template for ViewTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        let obj: Rc<dyn IsView> = dyn_cast_rc(instance.clone()).unwrap();
-        for resource in &self.resources {
-            obj.resources().insert(resource.load_content(names));
-        }
-        self.layout.as_ref().map(|x| obj.set_layout(dyn_cast_rc(x.load_content(names)).unwrap()));
-        self.min_size.map(|x| obj.set_min_size(x));
-        self.max_size.map(|x| obj.set_max_size(x));
-        self.h_align.map(|x| obj.set_h_align(x));
-        self.v_align.map(|x| obj.set_v_align(x));
-        self.margin.map(|x| obj.set_margin(x)); 
-        {
-            let obj = obj.clone();
-            names.resolve(
-                self.focus_tab.clone(),
-                Box::new(move |x| obj.set_focus_tab(Some(&dyn_cast_rc(x).unwrap())))
-            );
-        }
-        self.is_enabled.map(|x| obj.set_is_enabled(x));
+        let this = self;
+        view_apply_template!(this, instance, names);
     }
 }
 
@@ -217,8 +285,8 @@ struct ViewData {
     real_render_bounds: Rect,
     min_size: Vector,
     max_size: Vector,
-    h_align: Option<HAlign>,
-    v_align: Option<VAlign>,
+    h_align: ViewHAlign,
+    v_align: ViewVAlign,
     margin: Thickness,
     app: rc::Weak<dyn IsApp>,
     focus_tab: rc::Weak<dyn IsView>,
@@ -257,13 +325,13 @@ pub struct View {
     #[non_virt]
     set_max_size: fn(value: Vector),
     #[non_virt]
-    h_align: fn() -> Option<HAlign>,
+    h_align: fn() -> ViewHAlign,
     #[non_virt]
-    set_h_align: fn(value: Option<HAlign>),
+    set_h_align: fn(value: ViewHAlign),
     #[non_virt]
-    v_align: fn() -> Option<VAlign>,
+    v_align: fn() -> ViewVAlign,
     #[non_virt]
-    set_v_align: fn(value: Option<VAlign>),
+    set_v_align: fn(value: ViewVAlign),
     #[non_virt]
     margin: fn() -> Thickness,
     #[non_virt]
@@ -341,8 +409,8 @@ impl View {
                 visual_parent: <rc::Weak::<View>>::new(),
                 min_size: Vector::null(),
                 max_size: Vector { x: -1, y: -1 },
-                h_align: None,
-                v_align: None,
+                h_align: ViewHAlign::Stretch,
+                v_align: ViewVAlign::Stretch,
                 margin: Thickness::all(0),
                 focus_tab: <rc::Weak::<View>>::new(),
                 measure_size: None,
@@ -478,20 +546,20 @@ impl View {
         this.invalidate_measure();
     }
 
-    pub fn h_align_impl(this: &Rc<dyn IsView>) -> Option<HAlign> {
+    pub fn h_align_impl(this: &Rc<dyn IsView>) -> ViewHAlign {
         this.view().data.borrow().h_align
     }
 
-    pub fn set_h_align_impl(this: &Rc<dyn IsView>, value: Option<HAlign>) {
+    pub fn set_h_align_impl(this: &Rc<dyn IsView>, value: ViewHAlign) {
         this.view().data.borrow_mut().h_align = value;
         this.invalidate_measure();
     }
 
-    pub fn v_align_impl(this: &Rc<dyn IsView>) -> Option<VAlign> {
+    pub fn v_align_impl(this: &Rc<dyn IsView>) -> ViewVAlign {
         this.view().data.borrow().v_align
     }
 
-    pub fn set_v_align_impl(this: &Rc<dyn IsView>, value: Option<VAlign>) {
+    pub fn set_v_align_impl(this: &Rc<dyn IsView>, value: ViewVAlign) {
         this.view().data.borrow_mut().v_align = value;
         this.invalidate_measure();
     }
@@ -531,8 +599,8 @@ impl View {
         let (a_w, a_h) = {
             let this = this.view().data.borrow();
             if Some((w, h)) == this.measure_size { return; }
-            let g_w = if this.h_align.is_some() { None } else { w };
-            let g_h = if this.v_align.is_some() { None } else { h };
+            let g_w = if this.h_align != ViewHAlign::Stretch { None } else { w };
+            let g_h = if this.v_align != ViewVAlign::Stretch { None } else { h };
             let a = Vector { x: g_w.unwrap_or(0), y: g_h.unwrap_or(0) };
             let a = this.margin.shrink_rect_size(a);
             let a = a.min(this.max_size).max(this.min_size);
@@ -586,8 +654,8 @@ impl View {
         };
         let (render_bounds, real_render_bounds) = {
             let mut data = this.view().data.borrow_mut();
-            let h_align = data.h_align.unwrap_or(HAlign::Left);
-            let v_align = data.v_align.unwrap_or(VAlign::Top);
+            let h_align = <Option<HAlign>>::from(data.h_align).unwrap_or(HAlign::Left);
+            let v_align = <Option<VAlign>>::from(data.v_align).unwrap_or(VAlign::Top);
             let align = Thickness::align(render_size, bounds.size, h_align, v_align);
             let render_bounds = align.shrink_rect(bounds);
             let real_render_bounds = data.margin.shrink_rect(render_bounds);

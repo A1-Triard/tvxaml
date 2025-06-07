@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use iter_identify_first_last::IteratorIdentifyFirstLastExt;
+use serde::{Serialize, Deserialize};
 use std::cell::Cell;
 use crate::template::{Template, NameResolver};
 use crate::view_vec::ViewVecExt;
@@ -16,11 +17,11 @@ pub enum Dock { Left, Top, Right, Bottom }
 
 #[class_unsafe(inherits_Layout)]
 pub struct DockLayout {
-    dock: Cell<Option<Dock>>,
+    dock: Cell<Dock>,
     #[non_virt]
-    dock: fn() -> Option<Dock>,
+    dock: fn() -> Dock,
     #[non_virt]
-    set_dock: fn(value: Option<Dock>),
+    set_dock: fn(value: Dock),
 }
 
 impl DockLayout {
@@ -31,59 +32,64 @@ impl DockLayout {
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
         DockLayout {
             layout: unsafe { Layout::new_raw(vtable) },
-            dock: Cell::new(None),
+            dock: Cell::new(Dock::Left),
         }
     }
 
-    pub fn dock_impl(this: &Rc<dyn IsDockLayout>) -> Option<Dock> {
+    pub fn dock_impl(this: &Rc<dyn IsDockLayout>) -> Dock {
         this.dock_layout().dock.get()
     }
 
-    pub fn set_dock_impl(this: &Rc<dyn IsDockLayout>, value: Option<Dock>) {
+    pub fn set_dock_impl(this: &Rc<dyn IsDockLayout>, value: Dock) {
         this.dock_layout().dock.set(value);
         this.owner().and_then(|x| x.layout_parent()).map(|x| x.invalidate_measure());
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[derive(Serialize, Deserialize)]
-#[serde(rename="Dock")]
-enum DockSurrogate { Left, Top, Right, Bottom, Dock }
-
-fn serialize_dock<S>(value: &Option<Option<Dock>>, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
-    let surrogate = match value {
-        Some(Some(Dock::Left)) => Some(DockSurrogate::Left),
-        Some(Some(Dock::Top)) => Some(DockSurrogate::Top),
-        Some(Some(Dock::Right)) => Some(DockSurrogate::Right),
-        Some(Some(Dock::Bottom)) => Some(DockSurrogate::Bottom),
-        Some(None) => Some(DockSurrogate::Dock),
-        None => None,
+#[macro_export]
+macro_rules! dock_layout_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::layout_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub dock: Option<Dock>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
     };
-    surrogate.serialize(s)
 }
 
-fn deserialize_dock<'de, D>(d: D) -> Result<Option<Option<Dock>>, D::Error> where D: Deserializer<'de> {
-    let surrogate: Option<DockSurrogate> = Deserialize::deserialize(d)?;
-    Ok(match surrogate {
-        Some(DockSurrogate::Left) => Some(Some(Dock::Left)),
-        Some(DockSurrogate::Top) => Some(Some(Dock::Top)),
-        Some(DockSurrogate::Right) => Some(Some(Dock::Right)),
-        Some(DockSurrogate::Bottom) => Some(Some(Dock::Bottom)),
-        Some(DockSurrogate::Dock) => Some(None),
-        None => None,
-    })
+#[macro_export]
+macro_rules! dock_layout_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::layout_apply_template!($this, $instance, $names);
+        {
+            use $crate::dock_panel::DockLayoutExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::dock_panel::IsDockLayout>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.dock.map(|x| obj.set_dock(x));
+        }
+    };
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="DockLayout")]
-pub struct DockLayoutTemplate {
-    #[serde(flatten)]
-    pub layout: LayoutTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    #[serde(serialize_with="serialize_dock")]
-    #[serde(deserialize_with="deserialize_dock")]
-    pub dock: Option<Option<Dock>>,
+dock_layout_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="DockLayout")]
+    pub struct DockLayoutTemplate { }
 }
 
 #[typetag::serde(name="DockLayout")]
@@ -94,9 +100,8 @@ impl Template for DockLayoutTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.layout.apply(instance, names);
-        let obj: Rc<dyn IsDockLayout> = dyn_cast_rc(instance.clone()).unwrap();
-        self.dock.map(|x| obj.set_dock(x));
+        let this = self;
+        dock_layout_apply_template!(this, instance, names);
     }
 }
 
@@ -106,6 +111,11 @@ import! { pub dock_panel:
 
 #[class_unsafe(inherits_Panel)]
 pub struct DockPanel {
+    last_child_fill: Cell<bool>,
+    #[non_virt]
+    last_child_fill: fn() -> bool,
+    #[non_virt]
+    set_last_child_fill: fn(value: bool),
     #[over]
     measure_override: (),
     #[over]
@@ -120,19 +130,33 @@ impl DockPanel {
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
         DockPanel {
             panel: unsafe { Panel::new_raw(vtable) },
+            last_child_fill: Cell::new(true),
         }
     }
 
+    pub fn last_child_fill_impl(this: &Rc<dyn IsDockPanel>) -> bool {
+        this.dock_panel().last_child_fill.get()
+    }
+
+    pub fn set_last_child_fill_impl(this: &Rc<dyn IsDockPanel>, value: bool) {
+        this.dock_panel().last_child_fill.set(value);
+    }
+
     pub fn measure_override_impl(this: &Rc<dyn IsView>, mut w: Option<i16>, mut h: Option<i16>) -> Vector {
-        let this: Rc<dyn IsPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let this: Rc<dyn IsDockPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let last_child_fill = this.last_child_fill();
         let mut size = Vector::null();
         let mut docked = Thickness::all(0);
-        for child in this.children().iter() {
+        for (is_last, child) in this.children().iter().identify_last() {
+            if is_last && last_child_fill {
+                child.measure(w, h);
+                size = size.max(child.desired_size());
+                continue;
+            }
             let dock_layout: Option<Rc<dyn IsDockLayout>> = dyn_cast_rc(child.layout());
-            let dock = dock_layout.and_then(|x| x.dock());
+            let dock = dock_layout.map_or(Dock::Left, |x| x.dock());
             match dock {
-                None => { },
-                Some(Dock::Left) => {
+                Dock::Left => {
                     child.measure(None, h);
                     if let Some(w) = w.as_mut() {
                         *w = (*w as u16).saturating_sub(child.desired_size().x as u16) as i16;
@@ -142,7 +166,7 @@ impl DockPanel {
                     docked += docked_child;
                     size = docked_child.shrink_rect_size(size);
                 },
-                Some(Dock::Top) => {
+                Dock::Top => {
                     child.measure(w, None);
                     if let Some(h) = h.as_mut() {
                         *h = (*h as u16).saturating_sub(child.desired_size().y as u16) as i16;
@@ -152,7 +176,7 @@ impl DockPanel {
                     docked += docked_child;
                     size = docked_child.shrink_rect_size(size);
                 },
-                Some(Dock::Right) => {
+                Dock::Right => {
                     child.measure(None, h);
                     if let Some(w) = w.as_mut() {
                         *w = (*w as u16).saturating_sub(child.desired_size().x as u16) as i16;
@@ -162,7 +186,7 @@ impl DockPanel {
                     docked += docked_child;
                     size = docked_child.shrink_rect_size(size);
                 },
-                Some(Dock::Bottom) => {
+                Dock::Bottom => {
                     child.measure(w, None);
                     if let Some(h) = h.as_mut() {
                         *h = (*h as u16).saturating_sub(child.desired_size().y as u16) as i16;
@@ -174,28 +198,25 @@ impl DockPanel {
                 },
             }
         }
-        for child in this.children().iter() {
-            let dock_layout: Option<Rc<dyn IsDockLayout>> = dyn_cast_rc(child.layout());
-            let dock = dock_layout.and_then(|x| x.dock());
-            if dock.is_none() {
-                child.measure(w, h);
-                size = size.max(child.desired_size());
-            }
-        }
         docked.expand_rect_size(size)
     }
 
     pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
-        let this: Rc<dyn IsPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let this: Rc<dyn IsDockPanel> = dyn_cast_rc(this.clone()).unwrap();
+        let last_child_fill = this.last_child_fill();
         let mut size = Vector::null();
         let mut docked = Thickness::all(0);
-        for child in this.children().iter() {
+        for (is_last, child) in this.children().iter().identify_last() {
             let bounds = docked.shrink_rect(bounds);
+            if is_last && last_child_fill {
+                child.arrange(bounds);
+                size = size.max(child.render_bounds().size);
+                continue;
+            }
             let dock_layout: Option<Rc<dyn IsDockLayout>> = dyn_cast_rc(child.layout());
-            let dock = dock_layout.and_then(|x| x.dock());
+            let dock = dock_layout.map_or(Dock::Left, |x| x.dock());
             match dock {
-                None => { },
-                Some(Dock::Left) => {
+                Dock::Left => {
                     child.arrange(
                         Rect { tl: bounds.tl, size: Vector { x: child.desired_size().x, y: bounds.h() } },
                     );
@@ -204,7 +225,7 @@ impl DockPanel {
                     docked += docked_child;
                     size = docked_child.shrink_rect_size(size);
                 },
-                Some(Dock::Top) => {
+                Dock::Top => {
                     child.arrange(
                         Rect { tl: bounds.tl, size: Vector { x: bounds.w(), y: child.desired_size().y } },
                     );
@@ -213,7 +234,7 @@ impl DockPanel {
                     docked += docked_child;
                     size = docked_child.shrink_rect_size(size);
                 },
-                Some(Dock::Right) => {
+                Dock::Right => {
                     child.arrange(
                         Rect::from_tl_br(
                             Point {
@@ -228,7 +249,7 @@ impl DockPanel {
                     docked += docked_child;
                     size = docked_child.shrink_rect_size(size);
                 },
-                Some(Dock::Bottom) => {
+                Dock::Bottom => {
                     child.arrange(
                         Rect::from_tl_br(
                             Point {
@@ -245,34 +266,54 @@ impl DockPanel {
                 },
             }
         }
-        let bounds = docked.shrink_rect(bounds);
-        for child in this.children().iter() {
-            let dock_layout: Option<Rc<dyn IsDockLayout>> = dyn_cast_rc(child.layout());
-            let dock = dock_layout.and_then(|x| x.dock());
-            if dock.is_none() {
-                child.arrange(bounds);
-                size = size.max(child.render_bounds().size);
-            }
-        }
         docked.expand_rect_size(size)
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="DockPanel")]
-pub struct DockPanelTemplate {
-    #[serde(flatten)]
-    pub panel: PanelTemplate,
+#[macro_export]
+macro_rules! dock_panel_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::panel_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! dock_panel_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::panel_apply_template!($this, $instance, $names);
+    };
+}
+
+dock_panel_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="DockPanel")]
+    pub struct DockPanelTemplate { }
 }
 
 #[typetag::serde(name="DockPanel")]
 impl Template for DockPanelTemplate {
     fn is_name_scope(&self) -> bool {
-        self.panel.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.panel.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -282,6 +323,7 @@ impl Template for DockPanelTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.panel.apply(instance, names);
+        let this = self;
+        dock_panel_apply_template!(this, instance, names);
     }
 }

@@ -166,36 +166,76 @@ impl CheckBox {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="CheckBox")]
-pub struct CheckBoxTemplate {
-    #[serde(flatten)]
-    pub view: ViewTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub text: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub is_checked: Option<bool>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub color: Option<(Fg, Bg)>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub color_hotkey: Option<(Fg, Bg)>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub color_disabled: Option<(Fg, Bg)>,
+#[macro_export]
+macro_rules! check_box_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::view_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text: Option<String>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub is_checked: Option<bool>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_hotkey: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_disabled: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+ 
+#[macro_export]
+macro_rules! check_box_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::view_apply_template!($this, $instance, $names);
+        {
+            use $crate::check_box::CheckBoxExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::check_box::IsCheckBox>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.text.as_ref().map(|x| obj.set_text($crate::alloc_rc_Rc::new(x.clone())));
+            $this.is_checked.map(|x| obj.set_is_checked(x));
+            $this.color.map(|x| obj.set_color(x));
+            $this.color_hotkey.map(|x| obj.set_color_hotkey(x));
+            $this.color_disabled.map(|x| obj.set_color_disabled(x));
+        }
+    };
+}
+
+check_box_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="CheckBox")]
+    pub struct CheckBoxTemplate { }
 }
 
 #[typetag::serde(name="CheckBox")]
 impl Template for CheckBoxTemplate {
     fn is_name_scope(&self) -> bool {
-        self.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -205,12 +245,7 @@ impl Template for CheckBoxTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.view.apply(instance, names);
-        let obj: Rc<dyn IsCheckBox> = dyn_cast_rc(instance.clone()).unwrap();
-        self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));
-        self.is_checked.map(|x| obj.set_is_checked(x));
-        self.color.map(|x| obj.set_color(x));
-        self.color_hotkey.map(|x| obj.set_color_hotkey(x));
-        self.color_disabled.map(|x| obj.set_color_disabled(x));
+        let this = self;
+        check_box_apply_template!(this, instance, names);
     }
 }

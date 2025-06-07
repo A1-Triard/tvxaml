@@ -160,33 +160,72 @@ impl Frame {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="Frame")]
-pub struct FrameTemplate {
-    #[serde(flatten)]
-    pub decorator: DecoratorTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub text: Option<String>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub text_align: Option<HAlign>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub double: Option<bool>,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub color: Option<(Fg, Bg)>,
+#[macro_export]
+macro_rules! frame_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::decorator_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text: Option<String>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text_align: Option<$crate::int_vec_2d_HAlign>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub double: Option<bool>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+ 
+#[macro_export]
+macro_rules! frame_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::decorator_apply_template!($this, $instance, $names);
+        {
+            use $crate::frame::FrameExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::frame::IsFrame>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));
+            $this.text_align.map(|x| obj.set_text_align(x));
+            $this.double.map(|x| obj.set_double(x));
+            $this.color.map(|x| obj.set_color(x));
+        }
+    };
+}
+
+frame_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="Frame")]
+    pub struct FrameTemplate { }
 }
 
 #[typetag::serde(name="Frame")]
 impl Template for FrameTemplate {
     fn is_name_scope(&self) -> bool {
-        self.decorator.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.decorator.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -196,11 +235,7 @@ impl Template for FrameTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.decorator.apply(instance, names);
-        let obj: Rc<dyn IsFrame> = dyn_cast_rc(instance.clone()).unwrap();
-        self.text.as_ref().map(|x| obj.set_text(Rc::new(x.clone())));
-        self.text_align.map(|x| obj.set_text_align(x));
-        self.double.map(|x| obj.set_double(x));
-        self.color.map(|x| obj.set_color(x));
+        let this = self;
+        frame_apply_template!(this, instance, names);
     }
 }

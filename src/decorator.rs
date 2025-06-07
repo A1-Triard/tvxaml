@@ -90,24 +90,62 @@ impl Decorator {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="Decorator")]
-pub struct DecoratorTemplate {
-    #[serde(flatten)]
-    pub view: ViewTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub child: Option<Box<dyn Template>>,
+#[macro_export]
+macro_rules! decorator_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::view_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub child: Option<Box<dyn $crate::template::Template>>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! decorator_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::view_apply_template!($this, $instance, $names);
+        {
+            use $crate::decorator::DecoratorExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::decorator::IsDecorator>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.child.as_ref().map(|x|
+                obj.set_child(Some($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap()))
+            );
+        }
+    };
+}
+
+decorator_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="Decorator")]
+    pub struct DecoratorTemplate { }
 }
 
 #[typetag::serde(name="Decorator")]
 impl Template for DecoratorTemplate {
     fn is_name_scope(&self) -> bool {
-        self.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -117,8 +155,7 @@ impl Template for DecoratorTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.view.apply(instance, names);
-        let obj: Rc<dyn IsDecorator> = dyn_cast_rc(instance.clone()).unwrap();
-        self.child.as_ref().map(|x| obj.set_child(Some(dyn_cast_rc(x.load_content(names)).unwrap())));
+        let this = self;
+        decorator_apply_template!(this, instance, names);
     }
 }

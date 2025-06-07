@@ -94,24 +94,60 @@ impl StackPanel {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename="StackPanel")]
-pub struct StackPanelTemplate {
-    #[serde(flatten)]
-    pub panel: PanelTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub vertical: Option<bool>,
+#[macro_export]
+macro_rules! stack_panel_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::panel_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub vertical: Option<bool>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! stack_panel_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::panel_apply_template!($this, $instance, $names);
+        {
+            use $crate::stack_panel::StackPanelExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::stack_panel::IsStackPanel>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.vertical.map(|x| obj.set_vertical(x));
+        }
+    };
+}
+
+stack_panel_template! {
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename="StackPanel")]
+    pub struct StackPanelTemplate { }
 }
 
 #[typetag::serde(name="StackPanel")]
 impl Template for StackPanelTemplate {
     fn is_name_scope(&self) -> bool {
-        self.panel.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.panel.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -121,8 +157,7 @@ impl Template for StackPanelTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.panel.apply(instance, names);
-        let obj: Rc<dyn IsStackPanel> = dyn_cast_rc(instance.clone()).unwrap();
-        self.vertical.map(|x| obj.set_vertical(x));
+        let this = self;
+        stack_panel_apply_template!(this, instance, names);
     }
 }

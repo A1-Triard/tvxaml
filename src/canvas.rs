@@ -41,14 +41,50 @@ impl CanvasLayout {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="CanvasLayout")]
-pub struct CanvasLayoutTemplate {
-    #[serde(flatten)]
-    pub layout: LayoutTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub tl: Option<Point>,
+#[macro_export]
+macro_rules! canvas_layout_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::layout_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub tl: Option<$crate::int_vec_2d_Point>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! canvas_layout_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::layout_apply_template!($this, $instance, $names);
+        {
+            use $crate::canvas::CanvasLayoutExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::canvas::IsCanvasLayout>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.tl.map(|x| obj.set_tl(x));
+        }
+    };
+}
+
+canvas_layout_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="CanvasLayout")]
+    pub struct CanvasLayoutTemplate { }
 }
 
 #[typetag::serde(name="CanvasLayout")]
@@ -59,9 +95,8 @@ impl Template for CanvasLayoutTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.layout.apply(instance, names);
-        let obj: Rc<dyn IsCanvasLayout> = dyn_cast_rc(instance.clone()).unwrap();
-        self.tl.map(|x| obj.set_tl(x));
+        let this = self;
+        canvas_layout_apply_template!(this, instance, names);
     }
 }
 
@@ -108,21 +143,50 @@ impl Canvas {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="Canvas")]
-pub struct CanvasTemplate {
-    #[serde(flatten)]
-    pub panel: PanelTemplate,
+#[macro_export]
+macro_rules! canvas_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::panel_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! canvas_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::panel_apply_template!($this, $instance, $names);
+    };
+}
+
+canvas_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="Canvas")]
+    pub struct CanvasTemplate { }
 }
 
 #[typetag::serde(name="Canvas")]
 impl Template for CanvasTemplate {
     fn is_name_scope(&self) -> bool {
-        self.panel.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.panel.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -132,6 +196,7 @@ impl Template for CanvasTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.panel.apply(instance, names);
+        let this = self;
+        canvas_apply_template!(this, instance, names);
     }
 }

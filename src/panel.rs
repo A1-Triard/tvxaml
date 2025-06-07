@@ -81,24 +81,62 @@ impl Panel {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename="Panel")]
-pub struct PanelTemplate {
-    #[serde(flatten)]
-    pub view: ViewTemplate,
-    #[serde(default)]
-    #[serde(skip_serializing_if="Vec::is_empty")]
-    pub children: Vec<Box<dyn Template>>,
+#[macro_export]
+macro_rules! panel_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident {
+            $($(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::view_template! {
+            $(#[$attr])*
+            $vis struct $name {
+                #[serde(default)]
+                #[serde(skip_serializing_if="Vec::is_empty")]
+                pub children: Vec<Box<dyn Template>>,
+                $($(
+                    $(#[$field_attr])*
+                    $field_vis $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! panel_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::view_apply_template!($this, $instance, $names);
+        {
+            use $crate::panel::PanelExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::panel::IsPanel>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            for child in &$this.children {
+                obj.children().push($crate::dynamic_cast_dyn_cast_rc(child.load_content($names)).unwrap());
+            }
+        }
+    };
+}
+
+panel_template! {
+    #[derive(Serialize, Deserialize, Default)]
+    #[serde(rename="Panel")]
+    pub struct PanelTemplate { }
 }
 
 #[typetag::serde(name="Panel")]
 impl Template for PanelTemplate {
     fn is_name_scope(&self) -> bool {
-        self.view.is_name_scope
+        self.is_name_scope
     }
 
     fn name(&self) -> Option<&String> {
-        Some(&self.view.name)
+        Some(&self.name)
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
@@ -108,10 +146,7 @@ impl Template for PanelTemplate {
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
-        self.view.apply(instance, names);
-        let obj: Rc<dyn IsPanel> = dyn_cast_rc(instance.clone()).unwrap();
-        for child in &self.children {
-            obj.children().push(dyn_cast_rc(child.load_content(names)).unwrap());
-        }
+        let this = self;
+        panel_apply_template!(this, instance, names);
     }
 }
