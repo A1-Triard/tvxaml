@@ -111,24 +111,30 @@ impl ViewVec {
     }
 
     pub fn insert_impl(this: &Rc<dyn IsViewVec>, index: usize, element: Rc<dyn IsView>) {
-        let mut vec = this.view_vec().items.borrow_mut();
-        vec.insert(index, element);
+        {
+            let mut vec = this.view_vec().items.borrow_mut();
+            vec.insert(index, element);
+        }
         this.attach(index);
         this.changed();
     }
 
     pub fn remove_impl(this: &Rc<dyn IsViewVec>, index: usize) -> Rc<dyn IsView> {
         this.detach(index);
-        let mut vec = this.view_vec().items.borrow_mut();
-        let old = vec.remove(index);
+        let old = {
+            let mut vec = this.view_vec().items.borrow_mut();
+            vec.remove(index)
+        };
         this.changed();
         old
     }
 
     pub fn push_impl(this: &Rc<dyn IsViewVec>, value: Rc<dyn IsView>) {
-        let mut vec = this.view_vec().items.borrow_mut();
-        vec.push(value);
-        let index = vec.len() - 1;
+        let index = {
+            let mut vec = this.view_vec().items.borrow_mut();
+            vec.push(value);
+            vec.len() - 1
+        };
         this.attach(index);
         this.changed();
     }
@@ -138,8 +144,10 @@ impl ViewVec {
         if len == 0 { return None; }
         let index = len - 1;
         this.detach(index);
-        let mut vec = this.view_vec().items.borrow_mut();
-        let old = vec.pop().unwrap();
+        let old = {
+            let mut vec = this.view_vec().items.borrow_mut();
+            vec.pop().unwrap()
+        };
         this.changed();
         Some(old)
     }
@@ -149,8 +157,10 @@ impl ViewVec {
         for index in 0 .. len {
             this.detach(index);
         }
-        let mut vec = this.view_vec().items.borrow_mut();
-        vec.clear();
+        {
+            let mut vec = this.view_vec().items.borrow_mut();
+            vec.clear();
+        }
         this.changed();
     }
 
@@ -166,8 +176,10 @@ impl ViewVec {
 
     pub fn replace_impl(this: &Rc<dyn IsViewVec>, index: usize, element: Rc<dyn IsView>) -> Rc<dyn IsView> {
         this.detach(index);
-        let mut vec = this.view_vec().items.borrow_mut();
-        let old = replace(&mut vec[index], element);
+        let old = {
+            let mut vec = this.view_vec().items.borrow_mut();
+            replace(&mut vec[index], element)
+        };
         this.attach(index);
         this.changed();
         old

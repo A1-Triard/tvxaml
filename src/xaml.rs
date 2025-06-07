@@ -93,6 +93,29 @@ pub fn from_str<'a, T>(s: &'a str) -> Result<T, Error> where T: Deserialize<'a> 
     from_iter(s.bytes())
 }
 
+struct XamlSeqAccess<'a, S: Iterator<Item=u8>> {
+    reader: &'a mut Reader<S>,
+}
+
+impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::SeqAccess<'de> for XamlSeqAccess<'a, S> {
+    type Error = Error;
+
+    fn next_element_seed<T>(
+        &mut self,
+        seed: T,
+    ) -> Result<Option<T::Value>, Self::Error> where T: DeserializeSeed<'de> {
+        match self.reader.peek() {
+            no_std_xml::reader::XmlEvent::StartElement { .. } => { },
+            no_std_xml::reader::XmlEvent::EndElement { .. } => return Ok(None),
+            _ => {
+                return Err(Error::Unexpected { expected: "element start or element end".to_string() });
+            },
+        }
+        let res = seed.deserialize(XamlDeserializer { reader: self.reader })?;
+        Ok(Some(res))
+    }
+}
+
 struct XamlObjectAccess<'a, S: Iterator<Item=u8>> {
     reader: &'a mut Reader<S>,
     name: String,
@@ -108,7 +131,9 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlObjectAcces
     fn next_key_seed<K>(
         &mut self, seed: K
     ) -> Result<Option<K::Value>, Self::Error> where K: DeserializeSeed<'de> {
-        if self.done { return Ok(None); }
+        if self.done {
+            return Ok(None);
+        }
         self.done = true;
         let no_std_xml::reader::XmlEvent::StartElement { name, attributes, .. } = self.reader.next()? else {
             return Err(Error::Unexpected { expected: "element start".to_string() });
@@ -512,8 +537,8 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> Deserializer<'de> for XamlDeserializer
         panic!("not supported")
     }
 
-    fn deserialize_seq<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
+        visitor.visit_seq(XamlSeqAccess { reader: self.reader })
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
