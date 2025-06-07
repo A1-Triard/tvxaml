@@ -224,7 +224,7 @@ macro_rules! check_box_apply_template {
 
 check_box_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="CheckBox")]
+    #[serde(rename="CheckBox@Text")]
     pub struct CheckBoxTemplate { }
 }
 

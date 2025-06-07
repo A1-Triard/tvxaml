@@ -214,7 +214,7 @@ macro_rules! frame_apply_template {
 
 frame_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="Frame")]
+    #[serde(rename="Frame@Child")]
     pub struct FrameTemplate { }
 }
 

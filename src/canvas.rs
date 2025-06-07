@@ -83,7 +83,7 @@ macro_rules! canvas_layout_apply_template {
 
 canvas_layout_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="CanvasLayout")]
+    #[serde(rename="CanvasLayout@Tl")]
     pub struct CanvasLayoutTemplate { }
 }
 
@@ -175,7 +175,7 @@ macro_rules! canvas_apply_template {
 
 canvas_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="Canvas")]
+    #[serde(rename="Canvas@Children")]
     pub struct CanvasTemplate { }
 }
 

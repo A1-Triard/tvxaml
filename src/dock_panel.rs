@@ -88,7 +88,7 @@ macro_rules! dock_layout_apply_template {
 
 dock_layout_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="DockLayout")]
+    #[serde(rename="DockLayout@Dock")]
     pub struct DockLayoutTemplate { }
 }
 
@@ -302,7 +302,7 @@ macro_rules! dock_panel_apply_template {
 
 dock_panel_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="DockPanel")]
+    #[serde(rename="DockPanel@Children")]
     pub struct DockPanelTemplate { }
 }
 

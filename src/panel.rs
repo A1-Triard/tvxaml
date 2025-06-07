@@ -125,7 +125,7 @@ macro_rules! panel_apply_template {
 
 panel_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="Panel")]
+    #[serde(rename="Panel@Children")]
     pub struct PanelTemplate { }
 }
 

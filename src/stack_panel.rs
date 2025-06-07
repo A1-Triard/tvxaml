@@ -136,7 +136,7 @@ macro_rules! stack_panel_apply_template {
 
 stack_panel_template! {
     #[derive(Serialize, Deserialize)]
-    #[serde(rename="StackPanel")]
+    #[serde(rename="StackPanel@Children")]
     pub struct StackPanelTemplate { }
 }
 

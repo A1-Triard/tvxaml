@@ -20,6 +20,7 @@ pub use tvxaml_screen_base::Fg as tvxaml_screen_base_Fg;
 #[doc(hidden)]
 pub use tvxaml_screen_base::Bg as tvxaml_screen_base_Bg;
 
+pub mod xaml;
 pub mod obj_col;
 pub mod template;
 pub mod render_port;

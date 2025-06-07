@@ -449,7 +449,7 @@ macro_rules! static_text_apply_template {
 
 static_text_template! {
     #[derive(Serialize, Deserialize, Default)]
-    #[serde(rename="StaticText")]
+    #[serde(rename="StaticText@Text")]
     pub struct StaticTextTemplate { }
 }
 
