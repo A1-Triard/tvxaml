@@ -5,8 +5,10 @@ use serde::de::{self, DeserializeSeed, IntoDeserializer};
 use serde::de::value::{StringDeserializer, StrDeserializer};
 use std::fmt::{self, Display, Formatter};
 use std::vec::{self};
+use tvxaml_screen_base::trim_text;
 
-const XMLNS: &'static str = "https://a1-triard.github.io/tvxaml/2025/xaml";
+const XAML: &'static str = "https://a1-triard.github.io/tvxaml/2025/xaml";
+const XML: &'static str = "http://www.w3.org/XML/1998/namespace";
 
 #[derive(Debug)]
 pub enum Error {
@@ -64,7 +66,7 @@ pub fn from_iter<'a, T>(s: impl Iterator<Item=u8> + 'a) -> Result<T, Error> wher
     let no_std_xml::reader::XmlEvent::StartElement { name, attributes, .. } = skip_whitespace(&mut reader)? else {
         return Err(Error::Unexpected { expected: "element start".to_string() });
     };
-    if name.namespace_ref() != Some(XMLNS) { return Err(Error::UnknownOrMissingXmlns); }
+    if name.namespace_ref() != Some(XAML) { return Err(Error::UnknownOrMissingXmlns); }
     let deserializer = XamlDeserializer {
         reader: &mut reader,
         name: name.local_name,
@@ -120,6 +122,7 @@ struct XamlPropertiesAccess<'a, S: Iterator<Item=u8>> {
     attributes: vec::IntoIter<no_std_xml::attribute::OwnedAttribute>,
     value: Option<Either<String, (String, Vec<no_std_xml::attribute::OwnedAttribute>)>>,
     default_property_name: Option<&'static str>,
+    preserve_spaces: bool,
 }
 
 impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesAccess<'a, S> {
@@ -128,10 +131,25 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
     fn next_key_seed<K>(
         &mut self, seed: K
     ) -> Result<Option<K::Value>, Self::Error> where K: DeserializeSeed<'de> {
-        if let Some(attribute) = self.attributes.next() {
-            if attribute.name.namespace.is_some() {
-                return Err(Error::Unexpected { expected: "attribute without namespace".to_string() });
+        let attribute = loop {
+            if let Some(attribute) = self.attributes.next() {
+                if let Some(ns) = attribute.name.namespace_ref() {
+                    if ns == XML && attribute.name.local_name == "space" {
+                        match attribute.value.as_str() {
+                            "default" => self.preserve_spaces = false,
+                            "preserve" => self.preserve_spaces = true,
+                            _ => return Err(Error::Unexpected { expected: "default or preserve".to_string() }),
+                        }
+                        continue;
+                    }
+                    return Err(Error::Unexpected { expected: "attribute without namespace or xml:space".to_string() });
+                }
+                break Some(attribute);
+            } else {
+                break None;
             }
+        };
+        if let Some(attribute) = attribute {
             let property_name = seed.deserialize::<StringDeserializer<Self::Error>>(
                 to_snake(attribute.name.local_name).into_deserializer()
             )?;
@@ -140,7 +158,7 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
         } else {
             match skip_whitespace(self.reader) ? {
                 no_std_xml::reader::XmlEvent::StartElement { name, attributes, .. } => {
-                    if name.namespace_ref() != Some(XMLNS) { return Err(Error::UnknownOrMissingXmlns); }
+                    if name.namespace_ref() != Some(XAML) { return Err(Error::UnknownOrMissingXmlns); }
                     let property_name = if !name.local_name.starts_with(&self.object_name_prefix) {
                         self.value = Some(Right((name.local_name, attributes)));
                         let Some(default_property_name) = self.default_property_name else {
@@ -159,9 +177,23 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
                     )?;
                     Ok(Some(property_name))
                 },
+                no_std_xml::reader::XmlEvent::Characters(mut text) => {
+                    if !self.preserve_spaces {
+                        text = trim_text(&text).to_string();
+                    }
+                    self.value = Some(Left(text));
+                    let Some(default_property_name) = self.default_property_name else {
+                        return Err(Error::Unexpected { expected: "property tag".to_string() });
+                    };
+                    let property_name = to_snake(default_property_name);
+                    let property_name = seed.deserialize::<StringDeserializer<Self::Error>>(
+                        property_name.into_deserializer()
+                    )?;
+                    Ok(Some(property_name))
+                },
                 no_std_xml::reader::XmlEvent::EndElement { .. } => Ok(None),
                 x => {
-                    Err(Error::Unexpected { expected: format!("element start or element end ({x:?})") })
+                    Err(Error::Unexpected { expected: format!("element start or element end or characters ({x:?})") })
                 },
             }
         }
@@ -182,7 +214,7 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
         } else {
             match skip_whitespace(self.reader)? {
                 no_std_xml::reader::XmlEvent::StartElement { name, attributes, .. } => {
-                    if name.namespace_ref() != Some(XMLNS) { return Err(Error::UnknownOrMissingXmlns); }
+                    if name.namespace_ref() != Some(XAML) { return Err(Error::UnknownOrMissingXmlns); }
                     let res = seed.deserialize(XamlDeserializer {
                         reader: self.reader,
                         name: name.local_name,
@@ -354,6 +386,7 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> Deserializer<'de> for XamlPropertiesDe
             value: None,
             object_name_prefix: self.object_name_prefix,
             default_property_name,
+            preserve_spaces: false,
         })
     }
 
