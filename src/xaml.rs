@@ -199,12 +199,12 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
                 to_snake(attribute.name.local_name).into_deserializer()
             )?;
             self.value = Some(attribute.value);
-            self.full_explicit = false;
             Ok(Some(property_name))
         } else {
             match self.reader.peek() {
                 no_std_xml::reader::XmlEvent::StartElement { name, attributes, .. } => {
                     if name.namespace_ref() != Some(XAML) { return Err(Error::UnknownOrMissingXmlns); }
+                    let mut attribute_preserve_spaces = false;
                     let property_name = if !name.local_name.starts_with(&self.object_name_prefix) {
                         let Some(default_property_name) = self.default_property_name else {
                             return Err(Error::Unexpected { expected: "property tag".to_string() });
@@ -212,8 +212,20 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
                         self.full_explicit = false;
                         default_property_name
                     } else {
-                        if !attributes.is_empty() {
-                            return Err(Error::Unexpected { expected: "property tag without attributes".to_string() });
+                        for attribute in attributes {
+                            if let Some(ns) = attribute.name.namespace_ref() {
+                                if ns == XML && attribute.name.local_name == "space" {
+                                    match attribute.value.as_str() {
+                                        "default" => attribute_preserve_spaces = false,
+                                        "preserve" => attribute_preserve_spaces = true,
+                                        _ => return Err(Error::Unexpected {
+                                            expected: "default or preserve".to_string()
+                                        }),
+                                    }
+                                    continue;
+                                }
+                            }
+                            return Err(Error::Unexpected { expected: "xml:space".to_string() });
                         }
                         self.full_explicit = true;
                         &name.local_name[self.object_name_prefix.len() ..]
@@ -224,12 +236,22 @@ impl<'a, 'de, S: Iterator<Item=u8> + 'de> de::MapAccess<'de> for XamlPropertiesA
                     )?;
                     if self.full_explicit {
                         self.reader.next()?;
+                        if let no_std_xml::reader::XmlEvent::Characters(_) = self.reader.peek() {
+                            let no_std_xml::reader::XmlEvent::Characters(text) = self.reader.next()? else {
+                                panic!();
+                            };
+                            let no_std_xml::reader::XmlEvent::EndElement { .. } = self.reader.next()? else {
+                                return Err(Error::Unexpected { expected: format!("property end") });
+                            };
+                            self.value = Some(
+                                if attribute_preserve_spaces { text } else { trim_text(&text).to_string() }
+                            );
+                        }
                     }
                     Ok(Some(property_name))
                 },
                 no_std_xml::reader::XmlEvent::Characters(_) => {
                     let no_std_xml::reader::XmlEvent::Characters(text) = self.reader.next()? else { panic!(); };
-                    self.full_explicit = false;
                     self.value = Some(if self.preserve_spaces { text } else { trim_text(&text).to_string() });
                     let Some(default_property_name) = self.default_property_name else {
                         return Err(Error::Unexpected { expected: "property tag".to_string() });
