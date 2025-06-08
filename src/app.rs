@@ -1,6 +1,6 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use int_vec_2d::{Vector, Point};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
@@ -23,20 +23,22 @@ import! { pub app:
     use crate::view::IsView;
 }
 
-struct Focus {
-    changing: bool,
-    primary: rc::Weak<dyn IsView>,
-    secondary: rc::Weak<dyn IsView>,
+struct AppData {
+    changing_focus: bool,
+    primary_focus: rc::Weak<dyn IsView>,
+    secondary_focus: rc::Weak<dyn IsView>,
+    cursor: Option<Point>,
+    exit_code: Option<u8>,
+    invalidated_rect: Rect,
+    pre_process: Vec<rc::Weak<dyn IsView>>,
+    post_process: Vec<rc::Weak<dyn IsView>>,
 }
 
 #[class_unsafe(inherits_Obj)]
 pub struct App {
-    screen: RefCell<Box<dyn Screen>>,
-    cursor: Cell<Option<Point>>,
-    exit_code: Cell<Option<u8>>,
     root: Rc<dyn IsView>,
-    invalidated_rect: Cell<Rect>,
-    focus: RefCell<Focus>,
+    data: RefCell<AppData>,
+    screen: RefCell<Box<dyn Screen>>,
     #[non_virt]
     root: fn() -> Rc<dyn IsView>,
     #[non_virt]
@@ -51,6 +53,14 @@ pub struct App {
     focus: fn(view: Option<&Rc<dyn IsView>>, primary_focus: bool),
     #[non_virt]
     focused: fn(primary_focus: bool) -> Option<Rc<dyn IsView>>,
+    #[non_virt]
+    _add_pre_process: fn(view: &Rc<dyn IsView>),
+    #[non_virt]
+    _remove_pre_process: fn(view: &Rc<dyn IsView>),
+    #[non_virt]
+    _add_post_process: fn(view: &Rc<dyn IsView>),
+    #[non_virt]
+    _remove_post_process: fn(view: &Rc<dyn IsView>),
 }
 
 impl App {
@@ -62,14 +72,16 @@ impl App {
         App {
             obj: unsafe { Obj::new_raw(vtable) },
             screen: RefCell::new(screen),
-            cursor: Cell::new(None),
-            exit_code: Cell::new(None),
             root,
-            invalidated_rect: Cell::new(Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() }),
-            focus: RefCell::new(Focus {
-                changing: false,
-                primary: <rc::Weak::<View>>::new(),
-                secondary: <rc::Weak::<View>>::new(),
+            data: RefCell::new(AppData {
+                changing_focus: false,
+                primary_focus: <rc::Weak::<View>>::new(),
+                secondary_focus: <rc::Weak::<View>>::new(),
+                cursor: None,
+                exit_code: None,
+                invalidated_rect: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
+                pre_process: Vec::new(),
+                post_process: Vec::new(),
             }),
         }
     }
@@ -95,9 +107,10 @@ impl App {
     }
 
     pub fn run_impl(this: &Rc<dyn IsApp>) -> Result<u8, tvxaml_screen_base_Error> {
-        this.root().set_app(Some(this));
+        assert!(this.app().root.app().is_none(), "root already attached to another app");
+        this.app().root._attach_to_app(this);
         let res = loop {
-            if let Some(exit_code) = this.app().exit_code.get() {
+            if let Some(exit_code) = this.app().data.borrow().exit_code {
                 break Ok(exit_code);
             }
             let screen_size = this.app().screen.borrow().size();
@@ -105,26 +118,35 @@ impl App {
             this.app().root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
             let bounds = this.app().root.margin().shrink_rect(this.app().root.render_bounds());
             let mut screen = this.app().screen.borrow_mut();
+            let (cursor, invalidated_rect) = {
+                let mut data = this.app().data.borrow_mut();
+                (
+                    data.cursor,
+                    replace(&mut data.invalidated_rect, Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() })
+                )
+            };
             let mut rp = RenderPort {
                 screen: screen.as_mut(),
-                invalidated_rect: this.app().invalidated_rect.get(),
+                invalidated_rect,
                 bounds: bounds.intersect(Rect { tl: Point { x: 0, y: 0 }, size: screen_size }),
                 offset: Vector { x: bounds.l(), y: bounds.t() },
-                cursor: this.app().cursor.get(),
+                cursor,
             };
             Self::render(&this.app().root, &mut rp);
             let cursor = rp.cursor;
-            this.app().cursor.set(cursor);
+            this.app().data.borrow_mut().cursor = cursor;
             if let Err(e) = screen.update(cursor, true) {
                 break Err(e);
             }
         };
-        this.root().set_app(None);
+        this.focus(None, true);
+        this.focus(None, false);
+        this.app().root._detach_from_app();
         res
     }
 
     pub fn exit_impl(this: &Rc<dyn IsApp>, exit_code: u8) {
-        this.app().exit_code.set(Some(exit_code));
+        this.app().data.borrow_mut().exit_code = Some(exit_code);
     }
 
     pub fn quit_impl(this: &Rc<dyn IsApp>) {
@@ -133,45 +155,74 @@ impl App {
 
     pub fn invalidate_render_impl(this: &Rc<dyn IsApp>, rect: Rect) {
         let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
-        let union = this.app().invalidated_rect.get().union_intersect(rect, app_rect);
-        this.app().invalidated_rect.set(union);
+        let mut data = this.app().data.borrow_mut();
+        let union = data.invalidated_rect.union_intersect(rect, app_rect);
+        data.invalidated_rect = union;
     }
 
     pub fn focused_impl(this: &Rc<dyn IsApp>, primary_focus: bool) -> Option<Rc<dyn IsView>> {
-        let focus = this.app().focus.borrow();
+        let data = this.app().data.borrow();
         if primary_focus {
-            focus.primary.upgrade()
+            data.primary_focus.upgrade()
         } else {
-            focus.secondary.upgrade()
+            data.secondary_focus.upgrade()
         }
     }
 
     pub fn focus_impl(this: &Rc<dyn IsApp>, view: Option<&Rc<dyn IsView>>, primary_focus: bool) {
         view.map(|x| assert!(option_addr_eq(x.root().app().map(|x| Rc::as_ptr(&x)), Some(Rc::as_ptr(this)))));
         let prev = {
-            let mut focus = this.app().focus.borrow_mut();
-            assert!(!focus.changing);
-            focus.changing = true;
+            let mut data = this.app().data.borrow_mut();
+            assert!(!data.changing_focus);
+            data.changing_focus = true;
             if primary_focus {
-                replace(&mut focus.primary, <rc::Weak::<View>>::new())
+                replace(&mut data.primary_focus, <rc::Weak::<View>>::new())
             } else {
-                replace(&mut focus.secondary, <rc::Weak::<View>>::new())
+                replace(&mut data.secondary_focus, <rc::Weak::<View>>::new())
             }.upgrade()
         };
         if let Some(prev) = prev {
             prev._set_is_focused(primary_focus, false);
         }
         {
-            let mut focus = this.app().focus.borrow_mut();
+            let mut data = this.app().data.borrow_mut();
             if primary_focus {
-                focus.primary = view.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+                data.primary_focus = view.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
             } else {
-                focus.secondary = view.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+                data.secondary_focus = view.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
             };
         }
         if let Some(next) = view {
             next._set_is_focused(primary_focus, true);
         }
-        this.app().focus.borrow_mut().changing = false;
+        this.app().data.borrow_mut().changing_focus = false;
+    }
+
+    pub fn _add_pre_process_impl(this: &Rc<dyn IsApp>, view: &Rc<dyn IsView>) {
+        this.app().data.borrow_mut().pre_process.push(Rc::downgrade(view));
+    }
+
+    pub fn _remove_pre_process_impl(this: &Rc<dyn IsApp>, view: &Rc<dyn IsView>) {
+        let mut data = this.app().data.borrow_mut();
+        let view_as_ptr = Rc::as_ptr(view);
+        let index = data.pre_process.iter().position(|x| {
+            let Some(x) = x.upgrade() else { return false; };
+            addr_eq(Rc::as_ptr(&x), view_as_ptr)
+        }).unwrap();
+        data.pre_process.swap_remove(index);
+    }
+
+    pub fn _add_post_process_impl(this: &Rc<dyn IsApp>, view: &Rc<dyn IsView>) {
+        this.app().data.borrow_mut().post_process.push(Rc::downgrade(view));
+    }
+
+    pub fn _remove_post_process_impl(this: &Rc<dyn IsApp>, view: &Rc<dyn IsView>) {
+        let mut data = this.app().data.borrow_mut();
+        let view_as_ptr = Rc::as_ptr(view);
+        let index = data.post_process.iter().position(|x| {
+            let Some(x) = x.upgrade() else { return false; };
+            addr_eq(Rc::as_ptr(&x), view_as_ptr)
+        }).unwrap();
+        data.post_process.swap_remove(index);
     }
 }

@@ -1,4 +1,5 @@
 use basic_oop::{class_unsafe, import, Vtable};
+use bitflags::bitflags;
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cmp::min;
@@ -100,6 +101,15 @@ import! { pub view:
     use crate::app::IsApp;
     use crate::obj_col::IsObjCol;
     use crate::render_port::RenderPort;
+}
+
+bitflags! {
+    #[derive(Default)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct PrePostProcess: u8 {
+        const PRE_PROCESS = 1 << 0;
+        const POST_PROCESS = 1 << 1;
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -369,7 +379,9 @@ pub struct View {
     #[non_virt]
     app: fn() -> Option<Rc<dyn IsApp>>,
     #[non_virt]
-    set_app: fn(value: Option<&Rc<dyn IsApp>>),
+    _attach_to_app: fn(value: &Rc<dyn IsApp>),
+    #[non_virt]
+    _detach_from_app: fn(),
     #[non_virt]
     invalidate_render: fn(),
     #[non_virt]
@@ -392,6 +404,8 @@ pub struct View {
     root: fn() -> Rc<dyn IsView>,
     #[non_virt]
     is_visual_ancestor_of: fn(descendant: Rc<dyn IsView>) -> bool,
+    #[virt]
+    pre_post_process: fn() -> PrePostProcess,
 }
 
 impl View {
@@ -684,29 +698,41 @@ impl View {
         this.view().data.borrow().app.upgrade()
     }
 
-    pub fn set_app_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsApp>>) {
-        let set = value.is_some();
-        if !set {
-            if let Some(old_app) = this.view().data.borrow().app.upgrade() {
-                old_app.focus(None, true);
-                old_app.focus(None, false);
-            }
+    pub fn _attach_to_app_impl(this: &Rc<dyn IsView>, value: &Rc<dyn IsApp>) {
+        this.view().data.borrow_mut().app = Rc::downgrade(value);
+        let pre_post_process = this.pre_post_process();
+        if pre_post_process.contains(PrePostProcess::PRE_PROCESS) {
+            value._add_pre_process(this);
         }
-        let app = &mut this.view().data.borrow_mut().app;
-        let old_app = replace(app, value.map_or_else(|| <rc::Weak::<App>>::new(), Rc::downgrade));
-        if set && old_app.upgrade().is_some() {
-            *app = old_app;
-            panic!("app is already set");
+        if pre_post_process.contains(PrePostProcess::POST_PROCESS) {
+            value._add_post_process(this);
+        }
+        for i in 0 .. this.visual_children_count() {
+            this.visual_child(i)._attach_to_app(value);
+        }
+    }
+
+    pub fn _detach_from_app_impl(this: &Rc<dyn IsView>) {
+        let app = replace(&mut this.view().data.borrow_mut().app, <rc::Weak::<App>>::new()).upgrade().unwrap();
+        let pre_post_process = this.pre_post_process();
+        if pre_post_process.contains(PrePostProcess::PRE_PROCESS) {
+            app._remove_pre_process(this);
+        }
+        if pre_post_process.contains(PrePostProcess::POST_PROCESS) {
+            app._remove_post_process(this);
+        }
+        for i in 0 .. this.visual_children_count() {
+            this.visual_child(i)._detach_from_app();
         }
     }
 
     fn invalidate_render_raw(this: &Rc<dyn IsView>, rect: Rect) {
         let offset = this.view().data.borrow().real_render_bounds.tl;
         let parent_rect = rect.absolute_with(offset);
-        if let Some(app) = this.app() {
-            app.invalidate_render(parent_rect);
-        } else if let Some(parent) = this.visual_parent() {
+        if let Some(parent) = this.visual_parent() {
             Self::invalidate_render_raw(&parent, parent_rect);
+        } else if let Some(app) = this.app() {
+            app.invalidate_render(parent_rect);
         }
     }
 
@@ -715,6 +741,9 @@ impl View {
     }
 
     pub fn add_visual_child_impl(this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
+        if let Some(app) = this.app() {
+            child._attach_to_app(&app);
+        }
         child.invalidate_render();
         let is_enabled = {
             let data = this.view().data.borrow();
@@ -739,7 +768,7 @@ impl View {
     }
 
     pub fn remove_visual_child_impl(this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
-        if let Some(app) = this.root().app() {
+        if let Some(app) = this.app() {
             if let Some(focused) = app.focused(true) {
                 if child.is_visual_ancestor_of(focused) {
                     app.focus(None, true);
@@ -759,6 +788,7 @@ impl View {
         if !is_enabled {
             Self::update_is_enabled(child, true);
         }
+        child._detach_from_app();
     }
 
     pub fn visual_children_count_impl(_this: &Rc<dyn IsView>) -> usize {
@@ -804,5 +834,9 @@ impl View {
             }
         }
         root
+    }
+
+    pub fn pre_post_process_impl(_this: &Rc<dyn IsView>) -> PrePostProcess {
+        PrePostProcess::empty()
     }
 }
