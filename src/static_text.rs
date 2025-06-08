@@ -285,7 +285,9 @@ pub struct StaticText {
 
 impl StaticText {
     pub fn new() -> Rc<dyn IsStaticText> {
-        Rc::new(unsafe { Self::new_raw(STATIC_TEXT_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsStaticText> = Rc::new(unsafe { Self::new_raw(STATIC_TEXT_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -464,9 +466,7 @@ impl Template for StaticTextTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = StaticText::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(StaticText::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

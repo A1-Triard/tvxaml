@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
-use tvxaml_screen_base::Screen;
+use tvxaml_screen_base::{Screen, Event};
 use crate::render_port::RenderPort;
 use crate::view::{View, ViewExt};
 
@@ -36,13 +36,10 @@ struct AppData {
 
 #[class_unsafe(inherits_Obj)]
 pub struct App {
-    root: Rc<dyn IsView>,
     data: RefCell<AppData>,
     screen: RefCell<Box<dyn Screen>>,
     #[non_virt]
-    root: fn() -> Rc<dyn IsView>,
-    #[non_virt]
-    run: fn() -> Result<u8, tvxaml_screen_base_Error>,
+    run: fn(root: Rc<dyn IsView>, init: Option<&mut dyn FnMut()>) -> Result<u8, tvxaml_screen_base_Error>,
     #[non_virt]
     exit: fn(exit_code: u8),
     #[non_virt]
@@ -64,15 +61,14 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(screen: Box<dyn Screen>, root: Rc<dyn IsView>) -> Rc<dyn IsApp> {
-        Rc::new(unsafe { Self::new_raw(screen, root, APP_VTABLE.as_ptr()) })
+    pub fn new(screen: Box<dyn Screen>) -> Rc<dyn IsApp> {
+        Rc::new(unsafe { Self::new_raw(screen, APP_VTABLE.as_ptr()) })
     }
 
-    pub unsafe fn new_raw(screen: Box<dyn Screen>, root: Rc<dyn IsView>, vtable: Vtable) -> Self {
+    pub unsafe fn new_raw(screen: Box<dyn Screen>, vtable: Vtable) -> Self {
         App {
             obj: unsafe { Obj::new_raw(vtable) },
             screen: RefCell::new(screen),
-            root,
             data: RefCell::new(AppData {
                 changing_focus: false,
                 primary_focus: <rc::Weak::<View>>::new(),
@@ -86,8 +82,8 @@ impl App {
         }
     }
 
-    pub fn root_impl(this: &Rc<dyn IsApp>) -> Rc<dyn IsView> {
-        this.app().root.clone()
+    pub fn into_inner(self) -> Box<dyn Screen> {
+        self.screen.into_inner()
     }
 
     fn render(view: &Rc<dyn IsView>, rp: &mut RenderPort) {
@@ -106,17 +102,22 @@ impl App {
         }
     }
 
-    pub fn run_impl(this: &Rc<dyn IsApp>) -> Result<u8, tvxaml_screen_base_Error> {
-        assert!(this.app().root.app().is_none(), "root already attached to another app");
-        this.app().root._attach_to_app(this);
+    pub fn run_impl(
+        this: &Rc<dyn IsApp>,
+        root: Rc<dyn IsView>,
+        init: Option<&mut dyn FnMut()>
+    ) -> Result<u8, tvxaml_screen_base_Error> {
+        assert!(root.app().is_none(), "root already attached to another app");
+        root._attach_to_app(this);
+        init.map(|x| x());
         let res = loop {
-            if let Some(exit_code) = this.app().data.borrow().exit_code {
+            if let Some(exit_code) = this.app().data.borrow_mut().exit_code.take() {
                 break Ok(exit_code);
             }
             let screen_size = this.app().screen.borrow().size();
-            this.app().root.measure(Some(screen_size.x), Some(screen_size.y));
-            this.app().root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
-            let bounds = this.app().root.margin().shrink_rect(this.app().root.render_bounds());
+            root.measure(Some(screen_size.x), Some(screen_size.y));
+            root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
+            let bounds = root.margin().shrink_rect(root.render_bounds());
             let mut screen = this.app().screen.borrow_mut();
             let (cursor, invalidated_rect) = {
                 let mut data = this.app().data.borrow_mut();
@@ -132,16 +133,33 @@ impl App {
                 offset: Vector { x: bounds.l(), y: bounds.t() },
                 cursor,
             };
-            Self::render(&this.app().root, &mut rp);
+            Self::render(&root, &mut rp);
             let cursor = rp.cursor;
             this.app().data.borrow_mut().cursor = cursor;
-            if let Err(e) = screen.update(cursor, true) {
-                break Err(e);
+            match screen.update(cursor, true) {
+                Err(e) => break Err(e),
+                Ok(Some(Event::Key(n, key))) => {
+                    'c: for _ in 0 .. n.get() {
+                        for pre_process in this.app().data.borrow().pre_process.clone() {
+                            if pre_process.upgrade().unwrap().pre_process_key(key) { continue 'c; }
+                        }
+                        if let Some(focused) = this.focused(true) {
+                            if focused._raise_key(key) { continue; }
+                        }
+                        if let Some(focused) = this.focused(false) {
+                            if focused._raise_key(key) { continue; }
+                        }
+                        for post_process in this.app().data.borrow().post_process.clone() {
+                            if post_process.upgrade().unwrap().post_process_key(key) { continue 'c; }
+                        }
+                    }
+                },
+                _ => { },
             }
         };
         this.focus(None, true);
         this.focus(None, false);
-        this.app().root._detach_from_app();
+        root._detach_from_app();
         res
     }
 
@@ -170,7 +188,7 @@ impl App {
     }
 
     pub fn focus_impl(this: &Rc<dyn IsApp>, view: Option<&Rc<dyn IsView>>, primary_focus: bool) {
-        view.map(|x| assert!(option_addr_eq(x.root().app().map(|x| Rc::as_ptr(&x)), Some(Rc::as_ptr(this)))));
+        view.map(|x| assert!(option_addr_eq(x.app().map(|x| Rc::as_ptr(&x)), Some(Rc::as_ptr(this)))));
         let prev = {
             let mut data = this.app().data.borrow_mut();
             assert!(!data.changing_focus);

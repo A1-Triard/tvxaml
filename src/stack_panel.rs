@@ -24,7 +24,9 @@ pub struct StackPanel {
 
 impl StackPanel {
     pub fn new() -> Rc<dyn IsStackPanel> {
-        Rc::new(unsafe { Self::new_raw(STACK_PANEL_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsStackPanel> = Rc::new(unsafe { Self::new_raw(STACK_PANEL_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -151,9 +153,7 @@ impl Template for StackPanelTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = StackPanel::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(StackPanel::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

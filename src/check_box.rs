@@ -55,7 +55,9 @@ pub struct CheckBox {
 
 impl CheckBox {
     pub fn new() -> Rc<dyn IsCheckBox> {
-        Rc::new(unsafe { Self::new_raw(CHECK_BOX_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsCheckBox> = Rc::new(unsafe { Self::new_raw(CHECK_BOX_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -239,9 +241,7 @@ impl Template for CheckBoxTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = CheckBox::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(CheckBox::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

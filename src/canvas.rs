@@ -114,7 +114,9 @@ pub struct Canvas {
 
 impl Canvas {
     pub fn new() -> Rc<dyn IsCanvas> {
-        Rc::new(unsafe { Self::new_raw(CANVAS_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsCanvas> = Rc::new(unsafe { Self::new_raw(CANVAS_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -190,9 +192,7 @@ impl Template for CanvasTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = Canvas::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(Canvas::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

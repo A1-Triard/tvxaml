@@ -124,7 +124,9 @@ pub struct DockPanel {
 
 impl DockPanel {
     pub fn new() -> Rc<dyn IsDockPanel> {
-        Rc::new(unsafe { Self::new_raw(DOCK_PANEL_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsDockPanel> = Rc::new(unsafe { Self::new_raw(DOCK_PANEL_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -317,9 +319,7 @@ impl Template for DockPanelTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = DockPanel::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(DockPanel::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

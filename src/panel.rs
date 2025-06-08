@@ -39,7 +39,7 @@ import! { pub panel:
 pub struct Panel {
     children: Rc<dyn IsViewVec>,
     #[over]
-    init: (),
+    _init: (),
     #[non_virt]
     children: fn() -> Rc<dyn IsViewVec>,
     #[over]
@@ -50,7 +50,9 @@ pub struct Panel {
 
 impl Panel {
     pub fn new() -> Rc<dyn IsPanel> {
-        Rc::new(unsafe { Self::new_raw(PANEL_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsPanel> = Rc::new(unsafe { Self::new_raw(PANEL_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -60,8 +62,8 @@ impl Panel {
         }
     }
 
-    pub fn init_impl(this: &Rc<dyn IsView>) {
-        View::init_impl(this);
+    pub fn _init_impl(this: &Rc<dyn IsView>) {
+        View::_init_impl(this);
         let panel: Rc<dyn IsPanel> = dyn_cast_rc(this.clone()).unwrap();
         panel.panel().children.init(this);
     }
@@ -140,9 +142,7 @@ impl Template for PanelTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = Panel::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(Panel::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

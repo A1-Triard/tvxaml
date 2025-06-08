@@ -27,7 +27,9 @@ pub struct Decorator {
 
 impl Decorator {
     pub fn new() -> Rc<dyn IsDecorator> {
-        Rc::new(unsafe { Self::new_raw(DECORATOR_VTABLE.as_ptr()) })
+        let res: Rc<dyn IsDecorator> = Rc::new(unsafe { Self::new_raw(DECORATOR_VTABLE.as_ptr()) });
+        res._init();
+        res
     }
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
@@ -149,9 +151,7 @@ impl Template for DecoratorTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = Decorator::new();
-        obj.init();
-        dyn_cast_rc(obj).unwrap()
+        dyn_cast_rc(Decorator::new()).unwrap()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

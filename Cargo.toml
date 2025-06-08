@@ -11,7 +11,7 @@ members = [
 
 [dependencies]
 anycase = { version = "0.1.0", default-features = false, features = ["alloc"] }
-basic-oop = "0.7.0"
+basic-oop = "0.8.0"
 bitflags = "2.9.1"
 dynamic-cast = "0.2.0"
 either = { version = "1.15.0", default-features = false }
