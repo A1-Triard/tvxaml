@@ -2,6 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
+use crate::event_handler::EventHandler;
 use crate::render_port::label_width;
 use crate::template::{Template, NameResolver};
 
@@ -16,6 +17,7 @@ struct CheckBoxData {
     color: (Fg, Bg),
     color_hotkey: (Fg, Bg),
     color_disabled: (Fg, Bg),
+    checked_handler: EventHandler<Option<Box<dyn FnMut()>>>,
 }
 
 #[class_unsafe(inherits_View)]
@@ -51,6 +53,10 @@ pub struct CheckBox {
     render: (),
     #[over]
     is_focused_changed: (),
+    #[non_virt]
+    handle_checked: fn(handler: Option<Box<dyn FnMut()>>),
+    #[over]
+    key: (),
 }
 
 impl CheckBox {
@@ -69,6 +75,7 @@ impl CheckBox {
                 color: (Fg::White, Bg::Blue),
                 color_hotkey: (Fg::Yellow, Bg::Blue),
                 color_disabled: (Fg::DarkGray, Bg::Blue),
+                checked_handler: Default::default(),
             }),
         }
     }
@@ -165,6 +172,28 @@ impl CheckBox {
         if primary_focus {
             this.invalidate_render();
         }
+    }
+
+    pub fn handle_checked_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
+        this.check_box().data.borrow_mut().checked_handler.set(handler);
+    }
+
+    fn click(this: &Rc<dyn IsCheckBox>) {
+        let checked = !this.is_checked();
+        this.set_is_checked(checked);
+        if checked {
+            let mut invoke = this.check_box().data.borrow_mut().checked_handler.begin_invoke();
+            invoke.as_mut().map(|x| x());
+            this.check_box().data.borrow_mut().checked_handler.end_invoke(invoke);
+        }
+    }
+
+    pub fn key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
+        if key == Key::Char(' ') {
+            Self::click(&dyn_cast_rc(this.clone()).unwrap());
+            return true;
+        }
+        View::key_impl(this, key, original_source)
     }
 }
 

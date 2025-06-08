@@ -25,6 +25,7 @@ pub mod obj_col;
 pub mod template;
 pub mod render_port;
 pub mod app;
+pub mod event_handler;
 pub mod view;
 pub mod view_vec;
 pub mod panel;

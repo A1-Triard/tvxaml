@@ -24,6 +24,7 @@ import! { pub app:
 }
 
 struct AppData {
+    app_rect: Rect,
     changing_focus: bool,
     primary_focus: rc::Weak<dyn IsView>,
     secondary_focus: rc::Weak<dyn IsView>,
@@ -66,10 +67,12 @@ impl App {
     }
 
     pub unsafe fn new_raw(screen: Box<dyn Screen>, vtable: Vtable) -> Self {
+        let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: screen.size() };
         App {
             obj: unsafe { Obj::new_raw(vtable) },
             screen: RefCell::new(screen),
             data: RefCell::new(AppData {
+                app_rect,
                 changing_focus: false,
                 primary_focus: <rc::Weak::<View>>::new(),
                 secondary_focus: <rc::Weak::<View>>::new(),
@@ -138,19 +141,25 @@ impl App {
             this.app().data.borrow_mut().cursor = cursor;
             match screen.update(cursor, true) {
                 Err(e) => break Err(e),
+                Ok(Some(Event::Resize)) => {
+                    let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
+                    this.app().data.borrow_mut().app_rect = app_rect;
+                },
                 Ok(Some(Event::Key(n, key))) => {
                     'c: for _ in 0 .. n.get() {
                         for pre_process in this.app().data.borrow().pre_process.clone() {
-                            if pre_process.upgrade().unwrap().pre_process_key(key) { continue 'c; }
+                            let pre_process = pre_process.upgrade().unwrap();
+                            if pre_process.is_enabled() && pre_process.pre_process_key(key) { continue 'c; }
                         }
                         if let Some(focused) = this.focused(true) {
-                            if focused._raise_key(key) { continue; }
+                            if focused.is_enabled() && focused._raise_key(key) { continue; }
                         }
                         if let Some(focused) = this.focused(false) {
-                            if focused._raise_key(key) { continue; }
+                            if focused.is_enabled() && focused._raise_key(key) { continue; }
                         }
                         for post_process in this.app().data.borrow().post_process.clone() {
-                            if post_process.upgrade().unwrap().post_process_key(key) { continue 'c; }
+                            let post_process = post_process.upgrade().unwrap();
+                            if post_process.is_enabled() && post_process.post_process_key(key) { continue 'c; }
                         }
                     }
                 },
@@ -172,9 +181,8 @@ impl App {
     }
 
     pub fn invalidate_render_impl(this: &Rc<dyn IsApp>, rect: Rect) {
-        let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
         let mut data = this.app().data.borrow_mut();
-        let union = data.invalidated_rect.union_intersect(rect, app_rect);
+        let union = data.invalidated_rect.union_intersect(rect, data.app_rect);
         data.invalidated_rect = union;
     }
 

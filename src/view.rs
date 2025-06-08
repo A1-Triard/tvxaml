@@ -1,13 +1,13 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use bitflags::bitflags;
 use dynamic_cast::dyn_cast_rc;
-use either::{Either, Left, Right};
 use serde::{Serialize, Deserialize};
 use std::cmp::min;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
 use std::cell::RefCell;
+use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
 use crate::obj_col::ObjCol;
@@ -305,8 +305,8 @@ struct ViewData {
     changing_is_enabled: bool,
     is_focused_primary: bool,
     is_focused_secondary: bool,
-    preview_key_handler: Either<(), Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>>,
-    key_handler: Either<(), Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>>,
+    preview_key_handler: EventHandler<Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>>,
+    key_handler: EventHandler<Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>>,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -414,10 +414,10 @@ pub struct View {
     pre_process_key: fn(key: Key) -> bool,
     #[virt]
     post_process_key: fn(key: Key) -> bool,
-    #[virt]
-    handle_preview_key: fn(handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>),
-    #[virt]
-    handle_key: fn(handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>),
+    #[non_virt]
+    handle_preview_key: fn(handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>),
+    #[non_virt]
+    handle_key: fn(handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>),
     #[non_virt]
     _raise_key: fn(key: Key) -> bool,
 }
@@ -454,8 +454,8 @@ impl View {
                 changing_is_enabled: false,
                 is_focused_primary: false,
                 is_focused_secondary: false,
-                preview_key_handler: Right(None),
-                key_handler: Right(None),
+                preview_key_handler: Default::default(),
+                key_handler: Default::default(),
             })
         }
     }
@@ -869,31 +869,18 @@ impl View {
         Self::raise(this, |x| x.key(key, this))
     }
 
-    fn handle_key(
-        f: impl Fn(
-            &mut ViewData
-        ) -> &mut Either<(), Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>>,
-        this: &Rc<dyn IsView>,
-        key: Key,
-        original_source: &Rc<dyn IsView>
-    ) -> bool {
-        let mut handler = replace(f(&mut this.view().data.borrow_mut()), Left(()));
-        let handled
-            = handler.as_mut().right().unwrap().as_mut().map_or(false, |x| x(this, key, original_source));
-        let mut data = this.view().data.borrow_mut();
-        let stored_handler = f(&mut data);
-        if stored_handler.is_left() {
-            *stored_handler = handler;
-        }
+    pub fn preview_key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
+        let mut invoke = this.view().data.borrow_mut().preview_key_handler.begin_invoke();
+        let handled = invoke.as_mut().map_or(false, |x| x(key, original_source));
+        this.view().data.borrow_mut().preview_key_handler.end_invoke(invoke);
         handled
     }
 
-    pub fn preview_key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
-        Self::handle_key(|x| &mut x.preview_key_handler, this, key, original_source)
-    }
-
     pub fn key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
-        Self::handle_key(|x| &mut x.key_handler, this, key, original_source)
+        let mut invoke = this.view().data.borrow_mut().key_handler.begin_invoke();
+        let handled = invoke.as_mut().map_or(false, |x| x(key, original_source));
+        this.view().data.borrow_mut().key_handler.end_invoke(invoke);
+        handled
     }
 
     pub fn pre_process_key_impl(_this: &Rc<dyn IsView>, _key: Key) -> bool {
@@ -906,15 +893,15 @@ impl View {
 
     pub fn handle_preview_key_impl(
         this: &Rc<dyn IsView>, 
-        handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>
+        handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>
     ) {
-        this.view().data.borrow_mut().preview_key_handler = Right(handler);
+        this.view().data.borrow_mut().preview_key_handler.set(handler);
     }
 
     pub fn handle_key_impl(
         this: &Rc<dyn IsView>, 
-        handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, Key, &Rc<dyn IsView>) -> bool>>
+        handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>
     ) {
-        this.view().data.borrow_mut().key_handler = Right(handler);
+        this.view().data.borrow_mut().key_handler.set(handler);
     }
 }
