@@ -1,7 +1,10 @@
 [package]
-name = "custom-view"
-version = "0.1.0"
 edition = "2024"
+name = "custom-view"
+version = "0.0.0"
+publish = false
+
+[workspace]
 
 [dependencies]
 dynamic-cast = "0.2.0"

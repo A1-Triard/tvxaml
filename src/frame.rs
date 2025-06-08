@@ -58,7 +58,7 @@ impl Frame {
                 text: Rc::new(String::new()),
                 text_align: HAlign::Left,
                 double: false,
-                color: (Fg::White, Bg::Blue),
+                color: (Fg::LightGray, Bg::None),
             }),
         }
     }

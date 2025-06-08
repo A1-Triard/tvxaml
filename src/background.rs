@@ -41,7 +41,7 @@ impl Background {
             decorator: unsafe { Decorator::new_raw(vtable) },
             data: RefCell::new(BackgroundData {
                 pattern: Rc::new("░".to_string()),
-                color: (Fg::White, Bg::Blue),
+                color: (Fg::LightGray, Bg::Black),
             }),
         }
     }

@@ -1,12 +1,15 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use bitflags::bitflags;
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::de::Unexpected;
+use serde::de::Error as de_Error;
+use std::cell::RefCell;
 use std::cmp::min;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
-use std::cell::RefCell;
+use std::str::FromStr;
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
@@ -169,6 +172,58 @@ impl From<Option<VAlign>> for ViewVAlign {
 #[doc(hidden)]
 pub fn is_false(b: &bool) -> bool { !b }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename="OptionalI16")]
+enum OptionalI16NHRSurrogate {
+    None,
+    Some(i16)
+}
+
+impl From<Option<i16>> for OptionalI16NHRSurrogate {
+    fn from(value: Option<i16>) -> OptionalI16NHRSurrogate {
+        match value {
+            None => OptionalI16NHRSurrogate::None,
+            Some(x) => OptionalI16NHRSurrogate::Some(x),
+        }
+    }
+}
+
+impl From<OptionalI16NHRSurrogate> for Option<i16> {
+    fn from(value: OptionalI16NHRSurrogate) -> Option<i16> {
+        match value {
+            OptionalI16NHRSurrogate::None => None,
+            OptionalI16NHRSurrogate::Some(x) => Some(x),
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn serialize_optional_i16<S>(
+    value: &Option<Option<i16>>, serializer: S
+) -> Result<S::Ok, S::Error> where S: Serializer {
+    if serializer.is_human_readable() {
+        let s = value.map(|x| x.map_or_else(|| "None".to_string(), |x| x.to_string()));
+        s.serialize(serializer)
+    } else {
+        value.map(OptionalI16NHRSurrogate::from).serialize(serializer)
+    }
+}
+
+#[doc(hidden)]
+pub fn deserialize_optional_i16<'de, D>(
+    deserializer: D
+) -> Result<Option<Option<i16>>, D::Error> where D: Deserializer<'de> {
+    if deserializer.is_human_readable() {
+        let s = <Option<String>>::deserialize(deserializer)?;
+        let Some(s) = s else { return Ok(None); };
+        if s == "None" { return Ok(Some(None)); }
+        Ok(Some(Some(i16::from_str(&s).map_err(|_| D::Error::invalid_value(Unexpected::Str(&s), &"i16"))?)))
+    } else {
+        let v = <Option<OptionalI16NHRSurrogate>>::deserialize(deserializer)?;
+        Ok(v.map(|x| x.into()))
+    }
+}
+
 #[macro_export]
 macro_rules! view_template {
     (
@@ -181,6 +236,8 @@ macro_rules! view_template {
         }
     ) => {
         use $crate::view::is_false as tvxaml_view_is_false;
+        use $crate::view::serialize_optional_i16 as tvxaml_view_serialize_optional_i16;
+        use $crate::view::deserialize_optional_i16 as tvxaml_view_deserialize_optional_i16;
 
         $(#[$attr])*
         $vis struct $name {
@@ -198,10 +255,27 @@ macro_rules! view_template {
             pub layout: Option<Box<dyn $crate::template::Template>>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
+            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+            pub width: Option<Option<i16>>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+            pub height: Option<Option<i16>>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
             pub min_size: Option<$crate::int_vec_2d_Vector>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
-            pub max_size: Option<$crate::int_vec_2d_Vector>,
+            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+            pub max_width: Option<Option<i16>>,
+            #[serde(default)]
+            #[serde(skip_serializing_if="Option::is_none")]
+            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+            pub max_height: Option<Option<i16>>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
             pub h_align: Option<$crate::view::ViewHAlign>,
@@ -241,7 +315,8 @@ macro_rules! view_apply_template {
                 obj.set_layout($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap())
             );
             $this.min_size.map(|x| obj.set_min_size(x));
-            $this.max_size.map(|x| obj.set_max_size(x));
+            $this.max_width.map(|x| obj.set_max_width(x));
+            $this.max_height.map(|x| obj.set_max_height(x));
             $this.h_align.map(|x| obj.set_h_align(x));
             $this.v_align.map(|x| obj.set_v_align(x));
             $this.margin.map(|x| obj.set_margin(x)); 
@@ -293,8 +368,11 @@ struct ViewData {
     arrange_size: Option<Vector>,
     render_bounds: Rect,
     real_render_bounds: Rect,
+    width: Option<i16>,
+    height: Option<i16>,
     min_size: Vector,
-    max_size: Vector,
+    max_width: Option<i16>,
+    max_height: Option<i16>,
     h_align: ViewHAlign,
     v_align: ViewVAlign,
     margin: Thickness,
@@ -329,13 +407,25 @@ pub struct View {
     #[non_virt]
     set_visual_parent: fn(value: Option<&Rc<dyn IsView>>),
     #[non_virt]
+    width: fn() -> Option<i16>,
+    #[non_virt]
+    set_width: fn(value: Option<i16>),
+    #[non_virt]
+    height: fn() -> Option<i16>,
+    #[non_virt]
+    set_height: fn(value: Option<i16>),
+    #[non_virt]
     min_size: fn() -> Vector,
     #[non_virt]
     set_min_size: fn(value: Vector),
     #[non_virt]
-    max_size: fn() -> Vector,
+    max_width: fn() -> Option<i16>,
     #[non_virt]
-    set_max_size: fn(value: Vector),
+    set_max_width: fn(value: Option<i16>),
+    #[non_virt]
+    max_height: fn() -> Option<i16>,
+    #[non_virt]
+    set_max_height: fn(value: Option<i16>),
     #[non_virt]
     h_align: fn() -> ViewHAlign,
     #[non_virt]
@@ -437,8 +527,11 @@ impl View {
                 layout: Layout::new(),
                 layout_parent: <rc::Weak::<View>>::new(),
                 visual_parent: <rc::Weak::<View>>::new(),
+                width: None,
+                height: None,
                 min_size: Vector::null(),
-                max_size: Vector { x: -1, y: -1 },
+                max_width: None,
+                max_height: None,
                 h_align: ViewHAlign::Stretch,
                 v_align: ViewVAlign::Stretch,
                 margin: Thickness::all(0),
@@ -560,6 +653,24 @@ impl View {
         }
     }
 
+    pub fn width_impl(this: &Rc<dyn IsView>) -> Option<i16> {
+        this.view().data.borrow().width
+    }
+
+    pub fn set_width_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
+        this.view().data.borrow_mut().width = value;
+        this.invalidate_measure();
+    }
+
+    pub fn height_impl(this: &Rc<dyn IsView>) -> Option<i16> {
+        this.view().data.borrow().height
+    }
+
+    pub fn set_height_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
+        this.view().data.borrow_mut().height = value;
+        this.invalidate_measure();
+    }
+
     pub fn min_size_impl(this: &Rc<dyn IsView>) -> Vector {
         this.view().data.borrow().min_size
     }
@@ -569,12 +680,21 @@ impl View {
         this.invalidate_measure();
     }
 
-    pub fn max_size_impl(this: &Rc<dyn IsView>) -> Vector {
-        this.view().data.borrow().max_size
+    pub fn max_width_impl(this: &Rc<dyn IsView>) -> Option<i16> {
+        this.view().data.borrow().max_width
     }
 
-    pub fn set_max_size_impl(this: &Rc<dyn IsView>, value: Vector) {
-        this.view().data.borrow_mut().max_size = value;
+    pub fn set_max_width_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
+        this.view().data.borrow_mut().max_width = value;
+        this.invalidate_measure();
+    }
+
+    pub fn max_height_impl(this: &Rc<dyn IsView>) -> Option<i16> {
+        this.view().data.borrow().max_height
+    }
+
+    pub fn set_max_height_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
+        this.view().data.borrow_mut().max_height = value;
         this.invalidate_measure();
     }
 
@@ -628,20 +748,29 @@ impl View {
     }
 
     pub fn measure_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) {
-        let (a_w, a_h) = {
+        let (a_w, a_h, max_size, min_size) = {
             let this = this.view().data.borrow();
+            let max_width = this.width.or(this.max_width);
+            let max_height = this.height.or(this.max_height);
+            let max_size = Vector { x: max_width.unwrap_or(-1), y: max_height.unwrap_or(-1) };
+            let min_size = Vector {
+                x: this.width.unwrap_or(this.min_size.x),
+                y: this.height.unwrap_or(this.min_size.y),
+            };
             if Some((w, h)) == this.measure_size { return; }
             let g_w = if this.h_align != ViewHAlign::Stretch { None } else { w };
             let g_h = if this.v_align != ViewVAlign::Stretch { None } else { h };
+            let g_w = g_w.or(max_width);
+            let g_h = g_h.or(max_height);
             let a = Vector { x: g_w.unwrap_or(0), y: g_h.unwrap_or(0) };
             let a = this.margin.shrink_rect_size(a);
-            let a = a.min(this.max_size).max(this.min_size);
-            (g_w.map(|_| a.x), g_h.map(|_| a.y))
+            let a = a.min(max_size).max(min_size);
+            (g_w.map(|_| a.x), g_h.map(|_| a.y), max_size, min_size)
         };
         let desired_size = this.measure_override(a_w, a_h);
         {
             let mut this = this.view().data.borrow_mut();
-            let desired_size = desired_size.min(this.max_size).max(this.min_size);
+            let desired_size = desired_size.min(max_size).max(min_size);
             let desired_size = this.margin.expand_rect_size(desired_size);
             let desired_size = Vector {
                 x: w.map_or(desired_size.x, |w| min(w as u16, desired_size.x as u16) as i16),
@@ -674,14 +803,29 @@ impl View {
 
     pub fn arrange_impl(this: &Rc<dyn IsView>, bounds: Rect) {
         let render_size = {
-            let data = this.view().data.borrow();
-            if Some(bounds.size) == data.arrange_size {
-                data.render_bounds.size
-            } else {
-                let a_size = data.margin.shrink_rect_size(bounds.size).min(data.max_size).max(data.min_size);
+            let (a_size, max_size, min_size) = {
+                let data = this.view().data.borrow();
+                let max_width = data.width.or(data.max_width);
+                let max_height = data.height.or(data.max_height);
+                let max_size = Vector { x: max_width.unwrap_or(-1), y: max_height.unwrap_or(-1) };
+                let min_size = Vector {
+                    x: data.width.unwrap_or(data.min_size.x),
+                    y: data.height.unwrap_or(data.min_size.y),
+                };
+                if Some(bounds.size) == data.arrange_size {
+                    (None, max_size, min_size)
+                } else {
+                    let a_size = data.margin.shrink_rect_size(bounds.size).min(max_size).max(min_size);
+                    (Some(a_size), max_size, min_size)
+                }
+            };
+            if let Some(a_size) = a_size {
                 let render_size = this.arrange_override(Rect { tl: Point { x: 0, y: 0 }, size: a_size });
                 let data = this.view().data.borrow();
-                data.margin.expand_rect_size(render_size.min(data.max_size).max(data.min_size)).min(bounds.size)
+                data.margin.expand_rect_size(render_size.min(max_size).max(min_size)).min(bounds.size)
+            } else {
+                let data = this.view().data.borrow();
+                data.render_bounds.size
             }
         };
         let (render_bounds, real_render_bounds) = {
