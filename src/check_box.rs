@@ -18,6 +18,7 @@ struct CheckBoxData {
     color_hotkey: (Fg, Bg),
     color_disabled: (Fg, Bg),
     checked_handler: EventHandler<Option<Box<dyn FnMut()>>>,
+    unchecked_handler: EventHandler<Option<Box<dyn FnMut()>>>,
 }
 
 #[class_unsafe(inherits_View)]
@@ -55,6 +56,8 @@ pub struct CheckBox {
     is_focused_changed: (),
     #[non_virt]
     handle_checked: fn(handler: Option<Box<dyn FnMut()>>),
+    #[non_virt]
+    handle_unchecked: fn(handler: Option<Box<dyn FnMut()>>),
     #[over]
     key: (),
 }
@@ -76,6 +79,7 @@ impl CheckBox {
                 color_hotkey: (Fg::Yellow, Bg::Blue),
                 color_disabled: (Fg::DarkGray, Bg::Blue),
                 checked_handler: Default::default(),
+                unchecked_handler: Default::default(),
             }),
         }
     }
@@ -178,6 +182,10 @@ impl CheckBox {
         this.check_box().data.borrow_mut().checked_handler.set(handler);
     }
 
+    pub fn handle_unchecked_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
+        this.check_box().data.borrow_mut().unchecked_handler.set(handler);
+    }
+
     fn click(this: &Rc<dyn IsCheckBox>) {
         let checked = !this.is_checked();
         this.set_is_checked(checked);
@@ -185,6 +193,10 @@ impl CheckBox {
             let mut invoke = this.check_box().data.borrow_mut().checked_handler.begin_invoke();
             invoke.as_mut().map(|x| x());
             this.check_box().data.borrow_mut().checked_handler.end_invoke(invoke);
+        } else {
+            let mut invoke = this.check_box().data.borrow_mut().unchecked_handler.begin_invoke();
+            invoke.as_mut().map(|x| x());
+            this.check_box().data.borrow_mut().unchecked_handler.end_invoke(invoke);
         }
     }
 
