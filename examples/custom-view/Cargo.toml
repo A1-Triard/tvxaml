@@ -1,0 +1,11 @@
+[package]
+name = "custom-view"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dynamic-cast = "0.2.0"
+panicking = "0.5.0"
+tvxaml = { version = "0.1.0", path = "../.." }
+tvxaml-screen-base = { version = "0.1.0", path = "../../screen-base" }
+tvxaml-screen-ncurses = { version = "0.1.0", path = "../../screen-ncurses" }
