@@ -30,8 +30,6 @@ fn start() -> Result<u8, tvxaml_screen_base::Error> {
     let screen = unsafe { tvxaml_screen_ncurses::init(None, None) }?;
     let xaml = include_str!("ui.xaml");
     let ui: Box<dyn Template> = xaml::from_str(xaml).unwrap();
-    let mut file = std::fs::File::create("ui.yaml").unwrap();
-    serde_yaml_bw::to_writer(&mut file, &ui);
     let (root, names) = ui.load_root();
     let frame_layout: Rc<dyn IsCanvasLayout> = dyn_cast_rc(names.find("FrameLayout").unwrap().clone()).unwrap();
     let app = App::new(screen);
