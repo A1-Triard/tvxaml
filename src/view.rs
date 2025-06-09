@@ -904,6 +904,7 @@ impl View {
     }
 
     fn invalidate_render_raw(this: &Rc<dyn IsView>, rect: Rect) {
+        let rect = rect.intersect(this.inner_render_bounds());
         let offset = this.view().data.borrow().real_render_bounds.tl;
         let parent_rect = rect.absolute_with(offset);
         if let Some(parent) = this.visual_parent() {
