@@ -93,6 +93,10 @@ dock_layout_template! {
 
 #[typetag::serde(name="DockLayout")]
 impl Template for DockLayoutTemplate {
+    fn name(&self) -> Option<&String> {
+        Some(&self.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = DockLayout::new();
         dyn_cast_rc(obj).unwrap()

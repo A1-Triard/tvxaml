@@ -2,6 +2,7 @@ use anycase::to_snake;
 use serde::{Deserializer, Deserialize, serde_if_integer128};
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
 use serde::de::value::{StringDeserializer, StrDeserializer};
+use serde::de::Error as de_Error;
 use std::fmt::{self, Display, Formatter};
 use std::mem::replace;
 use std::vec::{self};
@@ -615,7 +616,7 @@ impl<'de> Deserializer<'de> for TextDeserializer {
     }
 
     fn deserialize_ignored_any<V>(self, _: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {
-        panic!("not supported")
+        Err(Error::custom("ignored"))
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: de::Visitor<'de> {

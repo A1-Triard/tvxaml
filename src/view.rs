@@ -33,6 +33,9 @@ macro_rules! layout_template {
     ) => {
         $(#[$attr])*
         $vis struct $name {
+            #[serde(default)]
+            #[serde(skip_serializing_if="String::is_empty")]
+            pub name: String,
             $($(
                 $(#[$field_attr])*
                 $field_vis $field_name : $field_ty
@@ -58,6 +61,10 @@ layout_template! {
 
 #[typetag::serde(name="Layout")]
 impl Template for LayoutTemplate {
+    fn name(&self) -> Option<&String> {
+        Some(&self.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         dyn_cast_rc(Layout::new()).unwrap()
     }

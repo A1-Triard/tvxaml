@@ -89,6 +89,10 @@ canvas_layout_template! {
 
 #[typetag::serde(name="CanvasLayout")]
 impl Template for CanvasLayoutTemplate {
+    fn name(&self) -> Option<&String> {
+        Some(&self.name)
+    }
+
     fn create_instance(&self) -> Rc<dyn IsObj> {
         let obj = CanvasLayout::new();
         dyn_cast_rc(obj).unwrap()

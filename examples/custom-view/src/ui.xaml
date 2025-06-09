@@ -1,9 +1,9 @@
 <Background xmlns='https://a1-triard.github.io/tvxaml/2025/xaml'>
   <Canvas>
-    <Frame Width="20" Height="10">
-      <Frame.Layout>
-        <CanvasLayout Tl="40,10" />
-      </Frame.Layout>
-    </Frame>
+    <FloatingFrame>
+      <FloatingFrame.Layout>
+        <CanvasLayout Tl="40,10" Name="FrameLayout" />
+      </FloatingFrame.Layout>
+    </FloatingFrame>
   </Canvas>
 </Background>
