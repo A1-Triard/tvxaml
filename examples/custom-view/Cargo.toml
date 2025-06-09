@@ -12,6 +12,5 @@ dynamic-cast = "0.2.0"
 panicking = "0.5.0"
 serde = { version = "1.0.219", default-features = false, features = ["derive", "alloc"] }
 tvxaml = { version = "0.1.0", path = "../.." }
-tvxaml-screen-base = { version = "0.1.0", path = "../../screen-base" }
 tvxaml-screen-ncurses = { version = "0.1.0", path = "../../screen-ncurses" }
 typetag = "0.2.20"

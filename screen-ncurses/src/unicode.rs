@@ -9,6 +9,7 @@ use core::cmp::{min};
 use core::mem::{size_of};
 use core::ptr::NonNull;
 use either::{Left, Right};
+use int_vec_2d::{Point, Range1d, Vector, Rect};
 use itertools::Itertools;
 use libc::*;
 use panicking::panicking;

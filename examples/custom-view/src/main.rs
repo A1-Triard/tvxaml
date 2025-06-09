@@ -3,7 +3,7 @@
 use dynamic_cast::dyn_cast_rc;
 use std::process::ExitCode;
 use std::rc::Rc;
-use tvxaml_screen_base::{Key, Vector};
+use tvxaml::base::{Key, Vector};
 use tvxaml::app::{App, AppExt};
 use tvxaml::canvas::{IsCanvasLayout, CanvasLayoutExt};
 use tvxaml::template::Template;
@@ -26,7 +26,7 @@ fn start_and_print_err() -> u8 {
     }
 }
 
-fn start() -> Result<u8, tvxaml_screen_base::Error> {
+fn start() -> Result<u8, tvxaml::base::Error> {
     let screen = unsafe { tvxaml_screen_ncurses::init(None, None) }?;
     let xaml = include_str!("ui.xaml");
     let ui: Box<dyn Template> = xaml::from_str(xaml).unwrap();

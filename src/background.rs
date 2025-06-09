@@ -6,7 +6,7 @@ use crate::template::{Template, NameResolver};
 
 import! { pub background:
     use [decorator crate::decorator];
-    use tvxaml_screen_base::{Fg, Bg};
+    use crate::base::{Fg, Bg};
 }
 
 struct BackgroundData {
@@ -90,7 +90,7 @@ macro_rules! background_template {
                 pub pattern: Option<String>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
                     $field_vis $field_name : $field_ty

@@ -108,7 +108,7 @@ impl Layout {
 import! { pub view:
     use [obj basic_oop::obj];
     use std::rc::Rc;
-    use tvxaml_screen_base::{Key, Vector, HAlign, VAlign, Rect, Thickness, Point};
+    use crate::base::{Key, Vector, HAlign, VAlign, Rect, Thickness, Point};
     use crate::app::IsApp;
     use crate::obj_col::IsObjCol;
     use crate::render_port::RenderPort;
@@ -271,7 +271,7 @@ macro_rules! view_template {
             pub height: Option<Option<i16>>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
-            pub min_size: Option<$crate::tvxaml_screen_base_Vector>,
+            pub min_size: Option<$crate::base::Vector>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
             #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
@@ -290,7 +290,7 @@ macro_rules! view_template {
             pub v_align: Option<$crate::view::ViewVAlign>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
-            pub margin: Option<$crate::tvxaml_screen_base_Thickness>,
+            pub margin: Option<$crate::base::Thickness>,
             #[serde(default)]
             #[serde(skip_serializing_if="String::is_empty")]
             pub focus_tab: String,

@@ -8,21 +8,12 @@ mod text_renderer {
     use either::{Left, Right};
     use iter_identify_first_last::IteratorIdentifyFirstLastExt;
     use itertools::Itertools;
-    use serde::{Serialize, Deserialize};
     use std::cmp::{max, min};
     use std::iter::{self};
     use std::mem::{replace, transmute};
     use std::slice::{self};
-    use tvxaml_screen_base::{Point, Rect, Vector, HAlign, Range1d, text_width, trim_text};
+    use crate::base::{Point, Rect, Vector, HAlign, Range1d, text_width, trim_text, TextWrapping};
     use unicode_width::UnicodeWidthChar;
-
-    #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-    #[derive(Serialize, Deserialize)]
-    pub enum TextWrapping {
-        NoWrap,
-        Wrap,
-        WrapWithOverflow,
-    }
 
     pub fn render_text(
         mut r: impl FnMut(Point, &str),
@@ -243,10 +234,8 @@ use text_renderer::render_text;
 
 import! { pub static_text:
     use [view crate::view];
-    use tvxaml_screen_base::{Fg, Bg};
+    use crate::base::{Fg, Bg, TextWrapping, TextAlign};
 }
-
-pub use text_renderer::TextWrapping;
 
 struct StaticTextData {
     text: Rc<String>,
@@ -370,32 +359,6 @@ impl StaticText {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[derive(Serialize, Deserialize)]
-pub enum TextAlign { Left, Center, Right, Justify }
-
-impl From<Option<HAlign>> for TextAlign {
-    fn from(value: Option<HAlign>) -> Self {
-        match value {
-            Some(HAlign::Left) => TextAlign::Left,
-            Some(HAlign::Center) => TextAlign::Center,
-            Some(HAlign::Right) => TextAlign::Right,
-            None => TextAlign::Justify,
-        }
-    }
-}
-
-impl From<TextAlign> for Option<HAlign> {
-    fn from(value: TextAlign) -> Self {
-        match value {
-            TextAlign::Left => Some(HAlign::Left),
-            TextAlign::Center => Some(HAlign::Center),
-            TextAlign::Right => Some(HAlign::Right),
-            TextAlign::Justify => None,
-        }
-    }
-}
-
 #[macro_export]
 macro_rules! static_text_template {
     (
@@ -421,7 +384,7 @@ macro_rules! static_text_template {
                 pub text_wrapping: Option<$crate::static_text::TextWrapping>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
                     $field_vis $field_name : $field_ty

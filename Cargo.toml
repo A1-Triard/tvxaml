@@ -16,6 +16,7 @@ bitflags = "2.9.1"
 dynamic-cast = "0.2.0"
 either = { version = "1.15.0", default-features = false }
 hashbrown = "0.15.3"
+int-vec-2d = { version = "0.2.0", features = ["serde"] }
 iter-identify_first_last = "0.2.3"
 itertools = { version = "0.14.0", default-features = false }
 no-std-xml = { git = "https://github.com/A1-Triard/no-std-xml.git", version = "0.8.20" }

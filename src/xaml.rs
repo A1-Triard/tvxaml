@@ -6,7 +6,7 @@ use serde::de::Error as de_Error;
 use std::fmt::{self, Display, Formatter};
 use std::mem::replace;
 use std::vec::{self};
-use tvxaml_screen_base::trim_text;
+use crate::base::trim_text;
 
 const XAML: &'static str = "https://a1-triard.github.io/tvxaml/2025/xaml";
 const XML: &'static str = "http://www.w3.org/XML/1998/namespace";

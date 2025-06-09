@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
-use tvxaml_screen_base::{Vector, Point, Screen, Event};
+use crate::base::{Vector, Point, Screen, Event};
 use crate::render_port::RenderPort;
 use crate::view::{View, ViewExt};
 
@@ -17,8 +17,8 @@ fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where 
 import! { pub app:
     use [obj basic_oop::obj];
     use std::rc::Rc;
-    use tvxaml_screen_base::Rect;
-    use tvxaml_screen_base::Error as tvxaml_screen_base_Error;
+    use crate::base::Rect;
+    use crate::base::Error as tvxaml_base_Error;
     use crate::view::IsView;
 }
 
@@ -39,7 +39,7 @@ pub struct App {
     data: RefCell<AppData>,
     screen: RefCell<Box<dyn Screen>>,
     #[non_virt]
-    run: fn(root: Rc<dyn IsView>, init: Option<&mut dyn FnMut()>) -> Result<u8, tvxaml_screen_base_Error>,
+    run: fn(root: Rc<dyn IsView>, init: Option<&mut dyn FnMut()>) -> Result<u8, tvxaml_base_Error>,
     #[non_virt]
     exit: fn(exit_code: u8),
     #[non_virt]
@@ -108,7 +108,7 @@ impl App {
         this: &Rc<dyn IsApp>,
         root: Rc<dyn IsView>,
         init: Option<&mut dyn FnMut()>
-    ) -> Result<u8, tvxaml_screen_base_Error> {
+    ) -> Result<u8, tvxaml_base_Error> {
         assert!(root.app().is_none(), "root already attached to another app");
         root._attach_to_app(this);
         init.map(|x| x());

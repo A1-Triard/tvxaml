@@ -9,6 +9,7 @@ use core::ptr::NonNull;
 use core::str::{self};
 use either::{Right, Left};
 use errno_no_std::errno;
+use int_vec_2d::{Point, Range1d, Vector, Rect};
 use libc::*;
 use panicking::panicking;
 use tvxaml_screen_base::*;

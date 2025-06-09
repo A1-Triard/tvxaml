@@ -14,7 +14,7 @@ repository = "https://github.com/A1-Triard/tvxaml"
 
 [dependencies]
 enum-derive-2018 = { version = "3.0.2", default-features = false }
-int-vec-2d = { version = "0.2.0", features = ["serde"] }
+int-vec-2d = "0.2.0"
 macro-attr-2018 = "3.0.1"
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 unicode-width = "0.2.0"

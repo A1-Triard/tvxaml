@@ -23,11 +23,10 @@ use core::alloc::Allocator;
 use core::fmt::{self, Debug, Display, Formatter};
 use core::num::NonZeroU16;
 use enum_derive_2018::{EnumDisplay, EnumFromStr, IterVariants};
+use int_vec_2d::{Point, Vector, Range1d};
 use macro_attr_2018::macro_attr;
 use serde::{Serialize, Deserialize};
 use unicode_width::UnicodeWidthChar;
-
-pub use int_vec_2d::*;
 
 pub fn char_width(c: char) -> i16 {
     if c == '\0' { 0 } else { c.width().map_or(0, |x| i16::try_from(x).unwrap()) }

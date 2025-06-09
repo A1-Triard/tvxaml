@@ -2,12 +2,12 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
-use tvxaml_screen_base::text_width;
+use crate::base::text_width;
 use crate::template::{Template, NameResolver};
 
 import! { pub frame:
     use [decorator crate::decorator];
-    use tvxaml_screen_base::{Fg, Bg};
+    use crate::base::{Fg, Bg};
 }
 
 struct FrameData {
@@ -179,13 +179,13 @@ macro_rules! frame_template {
                 pub text: Option<String>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub text_align: Option<$crate::tvxaml_screen_base_HAlign>,
+                pub text_align: Option<$crate::base::HAlign>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub double: Option<bool>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
                     $field_vis $field_name : $field_ty

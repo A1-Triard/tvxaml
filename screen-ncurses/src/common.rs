@@ -4,6 +4,7 @@ use core::alloc::Allocator;
 use core::ptr::{NonNull, null_mut};
 use core::num::NonZeroU16;
 use either::{Either, Left, Right};
+use int_vec_2d::Point;
 use libc::*;
 use tvxaml_screen_base::*;
 

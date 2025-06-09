@@ -1,7 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
-use tvxaml_screen_base::{Point, Fg, Bg};
+use tvxaml::base::{Point, Fg, Bg};
 use tvxaml::template::{Template, NameResolver};
 
 import! { pub floating_frame:

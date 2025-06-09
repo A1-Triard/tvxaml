@@ -2,13 +2,13 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
+use crate::base::label_width;
 use crate::event_handler::EventHandler;
-use crate::render_port::label_width;
 use crate::template::{Template, NameResolver};
 
 import! { pub check_box:
     use [view crate::view];
-    use tvxaml_screen_base::{Fg, Bg};
+    use crate::base::{Fg, Bg};
 }
 
 struct CheckBoxData {
@@ -231,13 +231,13 @@ macro_rules! check_box_template {
                 pub is_checked: Option<bool>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color_hotkey: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                pub color_hotkey: Option<($crate::base::Fg, $crate::base::Bg)>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color_disabled: Option<($crate::tvxaml_screen_base_Fg, $crate::tvxaml_screen_base_Bg)>,
+                pub color_disabled: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
                     $field_vis $field_name : $field_ty

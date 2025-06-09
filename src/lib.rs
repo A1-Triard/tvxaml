@@ -7,19 +7,8 @@
 pub use std::rc::Rc as alloc_rc_Rc;
 #[doc(hidden)]
 pub use dynamic_cast::dyn_cast_rc as dynamic_cast_dyn_cast_rc;
-#[doc(hidden)]
-pub use tvxaml_screen_base::Vector as tvxaml_screen_base_Vector;
-#[doc(hidden)]
-pub use tvxaml_screen_base::Thickness as tvxaml_screen_base_Thickness;
-#[doc(hidden)]
-pub use tvxaml_screen_base::Point as tvxaml_screen_base_Point;
-#[doc(hidden)]
-pub use tvxaml_screen_base::HAlign as tvxaml_screen_base_HAlign;
-#[doc(hidden)]
-pub use tvxaml_screen_base::Fg as tvxaml_screen_base_Fg;
-#[doc(hidden)]
-pub use tvxaml_screen_base::Bg as tvxaml_screen_base_Bg;
 
+pub mod base;
 pub mod xaml;
 pub mod obj_col;
 pub mod template;
