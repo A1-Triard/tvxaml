@@ -24,7 +24,7 @@ impl Names {
 
 pub struct NameResolver {
     names: Names,
-    clients: Vec<(String, Box<dyn FnOnce(Rc<dyn IsObj>)>)>,
+    clients: Vec<(String, Box<dyn FnOnce(Rc<dyn IsObj>)>, Option<Box<dyn FnOnce() -> Rc<dyn IsObj>>>)>,
 }
 
 impl NameResolver {
@@ -37,17 +37,36 @@ impl NameResolver {
 
     pub fn resolve(&mut self, name: String, client: Box<dyn FnOnce(Rc<dyn IsObj>)>) {
         if !name.is_empty() {
-            self.clients.push((name, client));
+            self.clients.push((name, client, None));
         }
     }
 
-    fn finish(self) -> Names {
-        for (name, client) in self.clients {
-            let Some(named_obj) = self.names.map.get(&name) else {
-                eprintln!("Warning: name not found ('{name}')");
-                continue;
+    pub fn resolve_or_create(
+        &mut self,
+        name: String,
+        client: Box<dyn FnOnce(Rc<dyn IsObj>)>,
+        create: Box<dyn FnOnce() -> Rc<dyn IsObj>>,
+    ) {
+        if !name.is_empty() {
+            self.clients.push((name, client, Some(create)));
+        }
+    }
+
+    fn finish(mut self) -> Names {
+        for (name, client, factory) in self.clients {
+            let named_obj = if let Some(named_obj) = self.names.map.get(&name) {
+                named_obj.clone()
+            } else {
+                if let Some(factory) = factory {
+                    let named_obj = factory();
+                    self.names.register(&name, named_obj.clone());
+                    named_obj
+                } else {
+                    eprintln!("Warning: name not found ('{name}')");
+                    continue;
+                }
             };
-            client(named_obj.clone())
+            client(named_obj)
         }
         self.names
     }

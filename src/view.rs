@@ -486,9 +486,9 @@ pub struct View {
     arrange_override: fn(bounds: Rect) -> Vector,
     #[non_virt]
     app: fn() -> Option<Rc<dyn IsApp>>,
-    #[non_virt]
+    #[virt]
     _attach_to_app: fn(value: &Rc<dyn IsApp>),
-    #[non_virt]
+    #[virt]
     _detach_from_app: fn(),
     #[non_virt]
     invalidate_render: fn(),

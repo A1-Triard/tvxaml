@@ -16,8 +16,8 @@ struct CheckBoxData {
     color: (Fg, Bg),
     color_hotkey: (Fg, Bg),
     color_disabled: (Fg, Bg),
-    checked_handler: EventHandler<Option<Box<dyn FnMut()>>>,
-    unchecked_handler: EventHandler<Option<Box<dyn FnMut()>>>,
+    toggle_handler: EventHandler<Option<Box<dyn FnMut()>>>,
+    click_handler: EventHandler<Option<Box<dyn FnMut()>>>,
 }
 
 #[class_unsafe(inherits_View)]
@@ -29,6 +29,8 @@ pub struct CheckBox {
     set_text: fn(value: Rc<String>),
     #[non_virt]
     is_checked: fn() -> bool,
+    #[virt]
+    is_checked_changed: fn(),
     #[non_virt]
     set_is_checked: fn(value: bool),
     #[non_virt]
@@ -53,10 +55,12 @@ pub struct CheckBox {
     render: (),
     #[over]
     is_focused_changed: (),
+    #[virt]
+    allow_click: fn() -> bool,
     #[non_virt]
-    handle_checked: fn(handler: Option<Box<dyn FnMut()>>),
+    handle_toggle: fn(handler: Option<Box<dyn FnMut()>>),
     #[non_virt]
-    handle_unchecked: fn(handler: Option<Box<dyn FnMut()>>),
+    handle_click: fn(handler: Option<Box<dyn FnMut()>>),
     #[over]
     key: (),
 }
@@ -77,8 +81,8 @@ impl CheckBox {
                 color: (Fg::White, Bg::Blue),
                 color_hotkey: (Fg::Yellow, Bg::Blue),
                 color_disabled: (Fg::DarkGray, Bg::Blue),
-                checked_handler: Default::default(),
-                unchecked_handler: Default::default(),
+                toggle_handler: Default::default(),
+                click_handler: Default::default(),
             }),
         }
     }
@@ -103,8 +107,19 @@ impl CheckBox {
     }
 
     pub fn set_is_checked_impl(this: &Rc<dyn IsCheckBox>, value: bool) {
-        this.check_box().data.borrow_mut().is_checked = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.is_checked == value { return; }
+            data.is_checked = value;
+        }
+        this.is_checked_changed();
+    }
+
+    pub fn is_checked_changed_impl(this: &Rc<dyn IsCheckBox>) {
         this.invalidate_render();
+        let mut invoke = this.check_box().data.borrow_mut().toggle_handler.begin_invoke();
+        invoke.as_mut().map(|x| x());
+        this.check_box().data.borrow_mut().toggle_handler.end_invoke(invoke);
     }
 
     pub fn color_impl(this: &Rc<dyn IsCheckBox>) -> (Fg, Bg) {
@@ -177,26 +192,25 @@ impl CheckBox {
         }
     }
 
-    pub fn handle_checked_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
-        this.check_box().data.borrow_mut().checked_handler.set(handler);
+    pub fn handle_toggle_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
+        this.check_box().data.borrow_mut().toggle_handler.set(handler);
     }
 
-    pub fn handle_unchecked_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
-        this.check_box().data.borrow_mut().unchecked_handler.set(handler);
+    pub fn handle_click_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
+        this.check_box().data.borrow_mut().click_handler.set(handler);
+    }
+
+    pub fn allow_click_impl(_this: &Rc<dyn IsCheckBox>) -> bool {
+        true
     }
 
     fn click(this: &Rc<dyn IsCheckBox>) {
+        if !this.allow_click() { return; }
         let checked = !this.is_checked();
         this.set_is_checked(checked);
-        if checked {
-            let mut invoke = this.check_box().data.borrow_mut().checked_handler.begin_invoke();
-            invoke.as_mut().map(|x| x());
-            this.check_box().data.borrow_mut().checked_handler.end_invoke(invoke);
-        } else {
-            let mut invoke = this.check_box().data.borrow_mut().unchecked_handler.begin_invoke();
-            invoke.as_mut().map(|x| x());
-            this.check_box().data.borrow_mut().unchecked_handler.end_invoke(invoke);
-        }
+        let mut invoke = this.check_box().data.borrow_mut().click_handler.begin_invoke();
+        invoke.as_mut().map(|x| x());
+        this.check_box().data.borrow_mut().click_handler.end_invoke(invoke);
     }
 
     pub fn key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {

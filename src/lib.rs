@@ -25,4 +25,5 @@ pub mod dock_panel;
 pub mod static_text;
 pub mod frame;
 pub mod check_box;
+pub mod radio_button;
 pub mod background;
