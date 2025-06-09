@@ -24,22 +24,26 @@ import! { pub layout:
 macro_rules! layout_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
-        $(#[$attr])*
-        $vis struct $name {
-            #[serde(default)]
-            #[serde(skip_serializing_if="String::is_empty")]
-            pub name: String,
-            $($(
-                $(#[$field_attr])*
-                $field_vis $field_name : $field_ty
-            ),+)?
+        $crate::template! {
+            $(#[$attr])*
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+                #[serde(default)]
+                #[serde(skip_serializing_if="String::is_empty")]
+                pub name: String,
+                $($(
+                    $(#[$field_attr])*
+                    pub $field_name : $field_ty
+                ),+)?
+            }
         }
     };
 }
@@ -54,9 +58,9 @@ macro_rules! layout_apply_template {
 }
 
 layout_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="Layout")]
-    pub struct LayoutTemplate { }
+    pub struct LayoutTemplate in layout_template { }
 }
 
 #[typetag::serde(name="Layout")]
@@ -234,73 +238,77 @@ pub fn deserialize_optional_i16<'de, D>(
 macro_rules! view_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
-        use $crate::view::is_false as tvxaml_view_is_false;
-        use $crate::view::serialize_optional_i16 as tvxaml_view_serialize_optional_i16;
-        use $crate::view::deserialize_optional_i16 as tvxaml_view_deserialize_optional_i16;
+        $crate::template! {
+            $(#[$attr])*
+            $vis struct $name in $mod {
+                use $crate::view::is_false as tvxaml_view_is_false;
+                use $crate::view::serialize_optional_i16 as tvxaml_view_serialize_optional_i16;
+                use $crate::view::deserialize_optional_i16 as tvxaml_view_deserialize_optional_i16;
+                $(use $path as $import;)*
 
-        $(#[$attr])*
-        $vis struct $name {
-            #[serde(default)]
-            #[serde(skip_serializing_if="tvxaml_view_is_false")]
-            pub is_name_scope: bool,
-            #[serde(default)]
-            #[serde(skip_serializing_if="String::is_empty")]
-            pub name: String,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Vec::is_empty")]
-            pub resources: Vec<Box<dyn $crate::template::Template>>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            pub layout: Option<Box<dyn $crate::template::Template>>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
-            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
-            pub width: Option<Option<i16>>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
-            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
-            pub height: Option<Option<i16>>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            pub min_size: Option<$crate::base::Vector>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
-            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
-            pub max_width: Option<Option<i16>>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
-            #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
-            pub max_height: Option<Option<i16>>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            pub h_align: Option<$crate::view::ViewHAlign>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            pub v_align: Option<$crate::view::ViewVAlign>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            pub margin: Option<$crate::base::Thickness>,
-            #[serde(default)]
-            #[serde(skip_serializing_if="String::is_empty")]
-            pub focus_tab: String,
-            #[serde(default)]
-            #[serde(skip_serializing_if="Option::is_none")]
-            pub is_enabled: Option<bool>,
-            $($(
-                $(#[$field_attr])*
-                $field_vis $field_name : $field_ty
-            ),+)?
+                #[serde(default)]
+                #[serde(skip_serializing_if="tvxaml_view_is_false")]
+                pub is_name_scope: bool,
+                #[serde(default)]
+                #[serde(skip_serializing_if="String::is_empty")]
+                pub name: String,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Vec::is_empty")]
+                pub resources: Vec<Box<dyn $crate::template::Template>>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub layout: Option<Box<dyn $crate::template::Template>>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+                #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+                pub width: Option<Option<i16>>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+                #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+                pub height: Option<Option<i16>>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub min_size: Option<$crate::base::Vector>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+                #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+                pub max_width: Option<Option<i16>>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
+                #[serde(deserialize_with="tvxaml_view_deserialize_optional_i16")]
+                pub max_height: Option<Option<i16>>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub h_align: Option<$crate::view::ViewHAlign>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub v_align: Option<$crate::view::ViewVAlign>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub margin: Option<$crate::base::Thickness>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="String::is_empty")]
+                pub focus_tab: String,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub is_enabled: Option<bool>,
+                $($(
+                    $(#[$field_attr])*
+                    pub $field_name : $field_ty
+                ),+)?
+            }
         }
     };
 }
@@ -341,9 +349,9 @@ macro_rules! view_apply_template {
 }
 
 view_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="View")]
-    pub struct ViewTemplate { }
+    pub struct ViewTemplate in view_template { }
 }
 
 #[typetag::serde(name="View")]

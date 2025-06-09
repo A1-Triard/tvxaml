@@ -1,6 +1,5 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
 use crate::template::{Template, NameResolver};
 
@@ -75,16 +74,18 @@ impl Background {
 macro_rules! background_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::decorator_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub pattern: Option<String>,
@@ -93,7 +94,7 @@ macro_rules! background_template {
                 pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -116,9 +117,9 @@ macro_rules! background_apply_template {
 }
 
 background_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="Background@Child")]
-    pub struct BackgroundTemplate { }
+    pub struct BackgroundTemplate in template { }
 }
 
 #[typetag::serde(name="Background")]

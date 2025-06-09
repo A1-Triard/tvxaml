@@ -1,6 +1,5 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
 use std::cell::Cell;
 use crate::template::{Template, NameResolver};
 use crate::view_vec::ViewVecExt;
@@ -100,22 +99,26 @@ impl StackPanel {
 macro_rules! stack_panel_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::panel_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub vertical: Option<bool>,
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -137,9 +140,9 @@ macro_rules! stack_panel_apply_template {
 }
 
 stack_panel_template! {
-    #[derive(Serialize, Deserialize)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="StackPanel@Children")]
-    pub struct StackPanelTemplate { }
+    pub struct StackPanelTemplate in template { }
 }
 
 #[typetag::serde(name="StackPanel")]

@@ -86,3 +86,31 @@ pub trait Template {
         (root, names)
     }
 }
+
+#[macro_export]
+macro_rules! template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
+            $($(
+                $(#[$field_attr:meta])*
+                pub $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        mod $mod {
+            $(use $path as $import;)*
+
+            $(#[$attr])*
+            pub struct $name {
+                $($(
+                    $(#[$field_attr])*
+                    pub $field_name : $field_ty
+                ),+)?
+            }
+        }
+        $vis use $mod::$name;
+    };
+}

@@ -1,6 +1,5 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
 use std::cell::Cell;
 use crate::template::{Template, NameResolver};
 use crate::view_vec::ViewVecExt;
@@ -45,22 +44,26 @@ impl CanvasLayout {
 macro_rules! canvas_layout_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::layout_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub tl: Option<$crate::base::Point>,
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -82,9 +85,9 @@ macro_rules! canvas_layout_apply_template {
 }
 
 canvas_layout_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="CanvasLayout@Tl")]
-    pub struct CanvasLayoutTemplate { }
+    pub struct CanvasLayoutTemplate in canvas_layout_template { }
 }
 
 #[typetag::serde(name="CanvasLayout")]
@@ -153,19 +156,23 @@ impl Canvas {
 macro_rules! canvas_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::panel_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -180,9 +187,9 @@ macro_rules! canvas_apply_template {
 }
 
 canvas_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="Canvas@Children")]
-    pub struct CanvasTemplate { }
+    pub struct CanvasTemplate in canvas_template { }
 }
 
 #[typetag::serde(name="Canvas")]

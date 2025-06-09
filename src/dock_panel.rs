@@ -49,22 +49,26 @@ impl DockLayout {
 macro_rules! dock_layout_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::layout_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub dock: Option<Dock>,
+                pub dock: Option<$crate::dock_panel::Dock>,
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -86,9 +90,9 @@ macro_rules! dock_layout_apply_template {
 }
 
 dock_layout_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="DockLayout@Dock")]
-    pub struct DockLayoutTemplate { }
+    pub struct DockLayoutTemplate in dock_layout_template { }
 }
 
 #[typetag::serde(name="DockLayout")]
@@ -279,19 +283,23 @@ impl DockPanel {
 macro_rules! dock_panel_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::panel_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -306,9 +314,9 @@ macro_rules! dock_panel_apply_template {
 }
 
 dock_panel_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="DockPanel@Children")]
-    pub struct DockPanelTemplate { }
+    pub struct DockPanelTemplate in dock_panel_template { }
 }
 
 #[typetag::serde(name="DockPanel")]

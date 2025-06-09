@@ -1,6 +1,5 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
-use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
 use crate::template::{Template, NameResolver};
 
@@ -94,22 +93,26 @@ impl Decorator {
 macro_rules! decorator_template {
     (
         $(#[$attr:meta])*
-        $vis:vis struct $name:ident {
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
             $($(
                 $(#[$field_attr:meta])*
-                $field_vis:vis $field_name:ident : $field_ty:ty
+                pub $field_name:ident : $field_ty:ty
             ),+ $(,)?)?
         }
     ) => {
         $crate::view_template! {
             $(#[$attr])*
-            $vis struct $name {
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub child: Option<Box<dyn $crate::template::Template>>,
                 $($(
                     $(#[$field_attr])*
-                    $field_vis $field_name : $field_ty
+                    pub $field_name : $field_ty
                 ),+)?
             }
         }
@@ -133,9 +136,9 @@ macro_rules! decorator_apply_template {
 }
 
 decorator_template! {
-    #[derive(Serialize, Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="Decorator@Child")]
-    pub struct DecoratorTemplate { }
+    pub struct DecoratorTemplate in template { }
 }
 
 #[typetag::serde(name="Decorator")]
