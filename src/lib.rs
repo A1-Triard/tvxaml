@@ -8,13 +8,13 @@ pub use std::rc::Rc as alloc_rc_Rc;
 #[doc(hidden)]
 pub use dynamic_cast::dyn_cast_rc as dynamic_cast_dyn_cast_rc;
 #[doc(hidden)]
-pub use int_vec_2d::Vector as int_vec_2d_Vector;
+pub use tvxaml_screen_base::Vector as tvxaml_screen_base_Vector;
 #[doc(hidden)]
-pub use int_vec_2d::Thickness as int_vec_2d_Thickness;
+pub use tvxaml_screen_base::Thickness as tvxaml_screen_base_Thickness;
 #[doc(hidden)]
-pub use int_vec_2d::Point as int_vec_2d_Point;
+pub use tvxaml_screen_base::Point as tvxaml_screen_base_Point;
 #[doc(hidden)]
-pub use int_vec_2d::HAlign as int_vec_2d_HAlign;
+pub use tvxaml_screen_base::HAlign as tvxaml_screen_base_HAlign;
 #[doc(hidden)]
 pub use tvxaml_screen_base::Fg as tvxaml_screen_base_Fg;
 #[doc(hidden)]

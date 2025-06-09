@@ -7,7 +7,7 @@ use crate::view_vec::ViewVecExt;
 
 import! { pub canvas_layout:
     use [layout crate::view];
-    use int_vec_2d::Point;
+    use tvxaml_screen_base::Point;
 }
 
 #[class_unsafe(inherits_Layout)]
@@ -57,7 +57,7 @@ macro_rules! canvas_layout_template {
             $vis struct $name {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub tl: Option<$crate::int_vec_2d_Point>,
+                pub tl: Option<$crate::tvxaml_screen_base_Point>,
                 $($(
                     $(#[$field_attr])*
                     $field_vis $field_name : $field_ty

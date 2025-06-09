@@ -8,7 +8,6 @@ use crate::view_vec::ViewVecExt;
 
 import! { pub dock_layout:
     use [layout crate::view];
-    use int_vec_2d::Point;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]

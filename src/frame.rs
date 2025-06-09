@@ -101,11 +101,11 @@ impl Frame {
 
     pub fn measure_override_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) -> Vector {
         let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
-        let available_size = Vector { x: w.unwrap_or(0), y: h.unwrap_or(0) };
-        let child_size = Thickness::all(1).shrink_rect_size(available_size);
-        let child_width = if w.is_none() { None } else { Some(child_size.x) };
-        let child_height = if h.is_none() { None } else { Some(child_size.y) };
         let size = if let Some(child) = this.child() {
+            let available_size = Vector { x: w.unwrap_or(0), y: h.unwrap_or(0) };
+            let child_size = Thickness::all(1).shrink_rect_size(available_size);
+            let child_width = if w.is_none() { None } else { Some(child_size.x) };
+            let child_height = if h.is_none() { None } else { Some(child_size.y) };
             child.measure(child_width, child_height);
             child.desired_size()
         } else {
@@ -179,7 +179,7 @@ macro_rules! frame_template {
                 pub text: Option<String>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub text_align: Option<$crate::int_vec_2d_HAlign>,
+                pub text_align: Option<$crate::tvxaml_screen_base_HAlign>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub double: Option<bool>,

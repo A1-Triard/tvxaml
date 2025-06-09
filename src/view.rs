@@ -101,8 +101,7 @@ impl Layout {
 import! { pub view:
     use [obj basic_oop::obj];
     use std::rc::Rc;
-    use int_vec_2d::{Vector, HAlign, VAlign, Rect, Thickness, Point};
-    use tvxaml_screen_base::Key;
+    use tvxaml_screen_base::{Key, Vector, HAlign, VAlign, Rect, Thickness, Point};
     use crate::app::IsApp;
     use crate::obj_col::IsObjCol;
     use crate::render_port::RenderPort;
@@ -265,7 +264,7 @@ macro_rules! view_template {
             pub height: Option<Option<i16>>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
-            pub min_size: Option<$crate::int_vec_2d_Vector>,
+            pub min_size: Option<$crate::tvxaml_screen_base_Vector>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
             #[serde(serialize_with="tvxaml_view_serialize_optional_i16")]
@@ -284,7 +283,7 @@ macro_rules! view_template {
             pub v_align: Option<$crate::view::ViewVAlign>,
             #[serde(default)]
             #[serde(skip_serializing_if="Option::is_none")]
-            pub margin: Option<$crate::int_vec_2d_Thickness>,
+            pub margin: Option<$crate::tvxaml_screen_base_Thickness>,
             #[serde(default)]
             #[serde(skip_serializing_if="String::is_empty")]
             pub focus_tab: String,
@@ -314,6 +313,8 @@ macro_rules! view_apply_template {
             $this.layout.as_ref().map(|x|
                 obj.set_layout($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap())
             );
+            $this.width.map(|x| obj.set_width(x));
+            $this.height.map(|x| obj.set_height(x));
             $this.min_size.map(|x| obj.set_min_size(x));
             $this.max_width.map(|x| obj.set_max_width(x));
             $this.max_height.map(|x| obj.set_max_height(x));

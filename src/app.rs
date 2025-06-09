@@ -1,10 +1,9 @@
 use basic_oop::{class_unsafe, import, Vtable};
-use int_vec_2d::{Vector, Point};
 use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
-use tvxaml_screen_base::{Screen, Event};
+use tvxaml_screen_base::{Vector, Point, Screen, Event};
 use crate::render_port::RenderPort;
 use crate::view::{View, ViewExt};
 
@@ -17,8 +16,8 @@ fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where 
 
 import! { pub app:
     use [obj basic_oop::obj];
-    use int_vec_2d::Rect;
     use std::rc::Rc;
+    use tvxaml_screen_base::Rect;
     use tvxaml_screen_base::Error as tvxaml_screen_base_Error;
     use crate::view::IsView;
 }

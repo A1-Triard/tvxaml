@@ -1,6 +1,5 @@
-use int_vec_2d::{Vector, Rect, Point, Range1d};
 use iter_identify_first_last::IteratorIdentifyFirstLastExt;
-use tvxaml_screen_base::{Screen, Fg, Bg, text_width};
+use tvxaml_screen_base::{Vector, Rect, Point, Range1d, Screen, Fg, Bg, text_width};
 
 pub struct RenderPort<'a> {
     pub(crate) screen: &'a mut dyn Screen,

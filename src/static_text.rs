@@ -6,7 +6,6 @@ use crate::template::{Template, NameResolver};
 
 mod text_renderer {
     use either::{Left, Right};
-    use int_vec_2d::{Point, Rect, Vector, HAlign, Range1d};
     use iter_identify_first_last::IteratorIdentifyFirstLastExt;
     use itertools::Itertools;
     use serde::{Serialize, Deserialize};
@@ -14,7 +13,7 @@ mod text_renderer {
     use std::iter::{self};
     use std::mem::{replace, transmute};
     use std::slice::{self};
-    use tvxaml_screen_base::{text_width, trim_text};
+    use tvxaml_screen_base::{Point, Rect, Vector, HAlign, Range1d, text_width, trim_text};
     use unicode_width::UnicodeWidthChar;
 
     #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
