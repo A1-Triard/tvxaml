@@ -1,6 +1,5 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use bitflags::bitflags;
-use dynamic_cast::dyn_cast_rc;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::de::Unexpected;
 use serde::de::Error as de_Error;
@@ -70,7 +69,7 @@ impl Template for LayoutTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(Layout::new()).unwrap()
+        Layout::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
@@ -365,7 +364,7 @@ impl Template for ViewTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(View::new()).unwrap()
+        View::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

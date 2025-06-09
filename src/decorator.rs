@@ -50,7 +50,7 @@ impl Decorator {
             child.set_layout_parent(None);
         }
         *this.decorator().child.borrow_mut() = value.clone();
-        let this: Rc<dyn IsView> = dyn_cast_rc(this.clone()).unwrap();
+        let this: Rc<dyn IsView> = this.clone();
         if let Some(child) = value {
             child.set_layout_parent(Some(&this));
             child.set_visual_parent(Some(&this));
@@ -152,7 +152,7 @@ impl Template for DecoratorTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(Decorator::new()).unwrap()
+        Decorator::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

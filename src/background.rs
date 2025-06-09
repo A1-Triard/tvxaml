@@ -133,7 +133,6 @@ impl Template for BackgroundTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        //dyn_cast_rc(Background::new()).unwrap()
         Background::new()
     }
 

@@ -431,7 +431,7 @@ impl Template for StaticTextTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(StaticText::new()).unwrap()
+        StaticText::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

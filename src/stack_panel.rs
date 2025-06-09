@@ -156,7 +156,7 @@ impl Template for StackPanelTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(StackPanel::new()).unwrap()
+        StackPanel::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

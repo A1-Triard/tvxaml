@@ -232,7 +232,7 @@ impl Template for FrameTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(Frame::new()).unwrap()
+        Frame::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

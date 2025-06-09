@@ -299,7 +299,7 @@ impl Template for CheckBoxTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(CheckBox::new()).unwrap()
+        CheckBox::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

@@ -57,7 +57,7 @@ impl Panel {
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
         Panel {
             view: unsafe { View::new_raw(vtable) },
-            children: dyn_cast_rc(PanelChildrenVec::new()).unwrap()
+            children: PanelChildrenVec::new()
         }
     }
 
@@ -145,7 +145,7 @@ impl Template for PanelTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(Panel::new()).unwrap()
+        Panel::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

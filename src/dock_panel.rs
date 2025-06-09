@@ -102,8 +102,7 @@ impl Template for DockLayoutTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = DockLayout::new();
-        dyn_cast_rc(obj).unwrap()
+        DockLayout::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
@@ -330,7 +329,7 @@ impl Template for DockPanelTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(DockPanel::new()).unwrap()
+        DockPanel::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

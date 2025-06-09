@@ -81,7 +81,7 @@ impl Template for RadioGroupTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(RadioGroup::new()).unwrap()
+        RadioGroup::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
@@ -330,7 +330,7 @@ impl Template for RadioButtonTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(RadioButton::new()).unwrap()
+        RadioButton::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {

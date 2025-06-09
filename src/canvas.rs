@@ -97,8 +97,7 @@ impl Template for CanvasLayoutTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        let obj = CanvasLayout::new();
-        dyn_cast_rc(obj).unwrap()
+        CanvasLayout::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
@@ -203,7 +202,7 @@ impl Template for CanvasTemplate {
     }
 
     fn create_instance(&self) -> Rc<dyn IsObj> {
-        dyn_cast_rc(Canvas::new()).unwrap()
+        Canvas::new()
     }
 
     fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
