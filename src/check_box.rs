@@ -63,6 +63,8 @@ pub struct CheckBox {
     handle_click: fn(handler: Option<Box<dyn FnMut()>>),
     #[over]
     key: (),
+    #[over]
+    _init: (),
 }
 
 impl CheckBox {
@@ -85,6 +87,11 @@ impl CheckBox {
                 click_handler: Default::default(),
             }),
         }
+    }
+
+    pub fn _init_impl(this: &Rc<dyn IsView>) {
+        View::_init_impl(this);
+        this.set_allow_focus(true);
     }
 
     pub fn is_enabled_changed_impl(this: &Rc<dyn IsView>) {

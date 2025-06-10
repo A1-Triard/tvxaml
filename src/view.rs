@@ -298,8 +298,8 @@ macro_rules! view_template {
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub margin: Option<$crate::base::Thickness>,
                 #[serde(default)]
-                #[serde(skip_serializing_if="String::is_empty")]
-                pub focus_tab: String,
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub allow_focus: Option<bool>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub is_enabled: Option<bool>,
@@ -335,13 +335,7 @@ macro_rules! view_apply_template {
             $this.h_align.map(|x| obj.set_h_align(x));
             $this.v_align.map(|x| obj.set_v_align(x));
             $this.margin.map(|x| obj.set_margin(x)); 
-            {
-                let obj = obj.clone();
-                $names.resolve(
-                    $this.focus_tab.clone(),
-                    Box::new(move |x| obj.set_focus_tab(Some(&$crate::dynamic_cast_dyn_cast_rc(x).unwrap())))
-                );
-            }
+            $this.allow_focus.map(|x| obj.set_allow_focus(x)); 
             $this.is_enabled.map(|x| obj.set_is_enabled(x));
         }
     };
@@ -392,7 +386,7 @@ struct ViewData {
     v_align: ViewVAlign,
     margin: Thickness,
     app: rc::Weak<dyn IsApp>,
-    focus_tab: rc::Weak<dyn IsView>,
+    allow_focus: bool,
     inherited_is_enabled: bool,
     is_enabled_core: bool,
     changing_is_enabled: bool,
@@ -454,9 +448,9 @@ pub struct View {
     #[non_virt]
     set_margin: fn(value: Thickness),
     #[non_virt]
-    focus_tab: fn() -> Option<Rc<dyn IsView>>,
+    allow_focus: fn() -> bool,
     #[non_virt]
-    set_focus_tab: fn(value: Option<&Rc<dyn IsView>>),
+    set_allow_focus: fn(value: bool),
     #[non_virt]
     is_enabled_core: fn() -> bool,
     #[non_virt]
@@ -550,7 +544,7 @@ impl View {
                 h_align: ViewHAlign::Stretch,
                 v_align: ViewVAlign::Stretch,
                 margin: Thickness::all(0),
-                focus_tab: <rc::Weak::<View>>::new(),
+                allow_focus: false,
                 measure_size: None,
                 desired_size: Vector::null(),
                 arrange_size: None,
@@ -740,13 +734,12 @@ impl View {
         this.invalidate_measure();
     }
 
-    pub fn focus_tab_impl(this: &Rc<dyn IsView>) -> Option<Rc<dyn IsView>> {
-        this.view().data.borrow().focus_tab.upgrade()
+    pub fn allow_focus_impl(this: &Rc<dyn IsView>) -> bool {
+        this.view().data.borrow().allow_focus
     }
 
-    pub fn set_focus_tab_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsView>>) {
-        this.view().data.borrow_mut().focus_tab
-            = value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade);
+    pub fn set_allow_focus_impl(this: &Rc<dyn IsView>, value: bool) {
+        this.view().data.borrow_mut().allow_focus = value;
     }
 
     pub fn invalidate_measure_impl(this: &Rc<dyn IsView>) {
@@ -831,10 +824,14 @@ impl View {
                     (None, max_size, min_size)
                 } else {
                     let a_size = data.margin.shrink_rect_size(bounds.size).min(max_size).max(min_size);
-                    (Some(a_size), max_size, min_size)
+                    (Some((a_size, data.h_align, data.v_align, data.desired_size)), max_size, min_size)
                 }
             };
-            if let Some(a_size) = a_size {
+            if let Some((a_size, h_align, v_align, desired_size)) = a_size {
+                let a_size = Vector {
+                    x: if h_align == ViewHAlign::Stretch { a_size.x } else { desired_size.x },
+                    y: if v_align == ViewVAlign::Stretch { a_size.y } else { desired_size.y }
+                };
                 let render_size = this.arrange_override(Rect { tl: Point { x: 0, y: 0 }, size: a_size });
                 let data = this.view().data.borrow();
                 data.margin.expand_rect_size(render_size.min(max_size).max(min_size)).min(bounds.size)

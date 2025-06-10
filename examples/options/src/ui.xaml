@@ -1,0 +1,20 @@
+<Background xmlns='https://a1-triard.github.io/tvxaml/2025/xaml'>
+  <Frame HAlign="Center" VAlign="Center" TextAlign="Center" Text="Options">
+    <StackPanel Margin="1,0,1,0" HAlign="Center">
+      <StackPanel>
+        <CheckBox Text="Option ~1~" />
+        <CheckBox Text="Option ~2~" IsChecked="True" />
+        <Frame Text="Radio Buttons">
+          <StackPanel Margin="1,0,1,0">
+            <RadioButton Text="~R~adio Button 1" IsChecked="True" />
+            <RadioButton Text="R~a~dio Button 2" />
+          </StackPanel>
+        </Frame>
+      </StackPanel>
+      <!--<StackPanel Vertical="False" HAlign="Center">
+        <Button Text="~O~K" Name="ok" FocusRight="cancel" FocusClick="Secondary" FocusedSecondary="True" />
+        <Button Text="~C~ancel" Margin="3,0,0,0" Name="cancel" FocusClick="Secondary" />
+      </StackPanel>-->
+    </StackPanel>
+  </Frame>
+</Background>

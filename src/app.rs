@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
-use crate::base::{Vector, Point, Screen, Event};
+use crate::base::{Vector, Point, Screen, Event, Key};
 use crate::render_port::RenderPort;
 use crate::view::{View, ViewExt};
 
@@ -23,6 +23,7 @@ import! { pub app:
 }
 
 struct AppData {
+    root: Option<Rc<dyn IsView>>,
     app_rect: Rect,
     changing_focus: bool,
     primary_focus: rc::Weak<dyn IsView>,
@@ -39,7 +40,7 @@ pub struct App {
     data: RefCell<AppData>,
     screen: RefCell<Box<dyn Screen>>,
     #[non_virt]
-    run: fn(root: Rc<dyn IsView>, init: Option<&mut dyn FnMut()>) -> Result<u8, tvxaml_base_Error>,
+    run: fn(root: &Rc<dyn IsView>, init: Option<&mut dyn FnMut()>) -> Result<u8, tvxaml_base_Error>,
     #[non_virt]
     exit: fn(exit_code: u8),
     #[non_virt]
@@ -58,6 +59,8 @@ pub struct App {
     _add_post_process: fn(view: &Rc<dyn IsView>),
     #[non_virt]
     _remove_post_process: fn(view: &Rc<dyn IsView>),
+    #[non_virt]
+    focus_next: fn(primary_focus: bool),
 }
 
 impl App {
@@ -71,6 +74,7 @@ impl App {
             obj: unsafe { Obj::new_raw(vtable) },
             screen: RefCell::new(screen),
             data: RefCell::new(AppData {
+                root: None,
                 app_rect,
                 changing_focus: false,
                 primary_focus: <rc::Weak::<View>>::new(),
@@ -106,10 +110,15 @@ impl App {
 
     pub fn run_impl(
         this: &Rc<dyn IsApp>,
-        root: Rc<dyn IsView>,
+        root: &Rc<dyn IsView>,
         init: Option<&mut dyn FnMut()>
     ) -> Result<u8, tvxaml_base_Error> {
         assert!(root.app().is_none(), "root already attached to another app");
+        let old_root = this.app().data.borrow_mut().root.replace(root.clone());
+        if let Some(old_root) = old_root {
+            this.app().data.borrow_mut().root = Some(old_root);
+            panic!("app is already running");
+        }
         root._attach_to_app(this);
         init.map(|x| x());
         let res = loop {
@@ -135,7 +144,7 @@ impl App {
                 offset: Vector { x: bounds.l(), y: bounds.t() },
                 cursor,
             };
-            Self::render(&root, &mut rp);
+            Self::render(root, &mut rp);
             let cursor = rp.cursor;
             this.app().data.borrow_mut().cursor = cursor;
             match screen.update(cursor, true) {
@@ -160,6 +169,9 @@ impl App {
                             let post_process = post_process.upgrade().unwrap();
                             if post_process.is_enabled() && post_process.post_process_key(key) { continue 'c; }
                         }
+                        if key == Key::Tab {
+                            this.focus_next(true);
+                        }
                     }
                 },
                 _ => { },
@@ -168,6 +180,7 @@ impl App {
         this.focus(None, true);
         this.focus(None, false);
         root._detach_from_app();
+        this.app().data.borrow_mut().root = None;
         res
     }
 
@@ -183,6 +196,47 @@ impl App {
         let mut data = this.app().data.borrow_mut();
         let union = data.invalidated_rect.union_intersect(rect, data.app_rect);
         data.invalidated_rect = union;
+    }
+
+    pub fn focus_next_impl(this: &Rc<dyn IsApp>, primary_focus: bool) {
+        let focused = if let Some(focused) = this.focused(primary_focus) {
+            focused
+        } else {
+            let Some(root) = this.app().data.borrow().root.clone() else {
+                panic!("app in not running");
+            };
+            if !root.is_enabled() { return; }
+            if root.allow_focus() {
+                this.focus(Some(&root), primary_focus);
+                return;
+            }
+            root
+        };
+        let mut focus = focused.clone();
+        loop {
+            if focus.visual_children_count() != 0 {
+                focus = focus.visual_child(0);
+            } else {
+                while let Some(parent) = focus.visual_parent() {
+                    let children_count = parent.visual_children_count();
+                    debug_assert!(children_count != 0);
+                    let index = (0 .. children_count).into_iter()
+                        .find(|&i| addr_eq(Rc::as_ptr(&parent.visual_child(i)), Rc::as_ptr(&focus)))
+                        .unwrap();
+                    if index == children_count - 1 {
+                        focus = parent;
+                    } else {
+                        focus = parent.visual_child(index + 1);
+                        break;
+                    }
+                }
+            }
+            if addr_eq(Rc::as_ptr(&focus), Rc::as_ptr(&focused)) { return; }
+            if focus.allow_focus() && focus.is_enabled() {
+                this.focus(Some(&focus), primary_focus);
+                return;
+            }
+        }
     }
 
     pub fn focused_impl(this: &Rc<dyn IsApp>, primary_focus: bool) -> Option<Rc<dyn IsView>> {
