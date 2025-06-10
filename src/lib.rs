@@ -8,6 +8,8 @@ pub use std::rc::Rc as alloc_rc_Rc;
 #[doc(hidden)]
 pub use dynamic_cast::dyn_cast_rc as dynamic_cast_dyn_cast_rc;
 
+mod arena;
+
 pub mod base;
 pub mod xaml;
 pub mod obj_col;

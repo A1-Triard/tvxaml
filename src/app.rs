@@ -3,6 +3,8 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
+use timer_no_std::{MonoClock, MonoTime};
+use crate::arena::{Handle, Registry};
 use crate::base::{Vector, Point, Screen, Event, Key};
 use crate::render_port::RenderPort;
 use crate::view::{View, ViewExt};
@@ -22,6 +24,35 @@ import! { pub app:
     use crate::view::IsView;
 }
 
+struct TimerData {
+    start: MonoTime,
+    span_ms: u16,
+    alarm: Box<dyn FnOnce()>,
+}
+
+#[derive(Debug)]
+pub struct Timer(Handle);
+
+impl Timer {
+    pub fn new(
+        app: &Rc<dyn IsApp>,
+        span_ms: u16,
+        alarm: Box<dyn FnOnce()>
+    ) -> Self {
+        let mut app = app.app().data.borrow_mut();
+        let start = app.clock.as_ref().expect("app is not running").time();
+        app.timers.insert(move |handle| (TimerData {
+            start,
+            span_ms,
+            alarm
+        }, Timer(handle)))
+    }
+
+    pub fn drop_timer(self, app: &Rc<dyn IsApp>) {
+        app.app().data.borrow_mut().timers.remove(self.0);
+    }
+}
+
 struct AppData {
     root: Option<Rc<dyn IsView>>,
     app_rect: Rect,
@@ -33,6 +64,8 @@ struct AppData {
     invalidated_rect: Rect,
     pre_process: Vec<rc::Weak<dyn IsView>>,
     post_process: Vec<rc::Weak<dyn IsView>>,
+    timers: Registry<TimerData>,
+    clock: Option<MonoClock>,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -40,7 +73,11 @@ pub struct App {
     data: RefCell<AppData>,
     screen: RefCell<Box<dyn Screen>>,
     #[non_virt]
-    run: fn(root: &Rc<dyn IsView>, init: Option<&mut dyn FnMut()>) -> Result<u8, tvxaml_base_Error>,
+    run: fn(
+        clock: &mut Option<MonoClock>,
+        root: &Rc<dyn IsView>,
+        init: Option<&mut dyn FnMut()>,
+    ) -> Result<u8, tvxaml_base_Error>,
     #[non_virt]
     exit: fn(exit_code: u8),
     #[non_virt]
@@ -84,6 +121,8 @@ impl App {
                 invalidated_rect: Rect { tl: Point { x: 0, y: 0 }, size: Vector::null() },
                 pre_process: Vec::new(),
                 post_process: Vec::new(),
+                clock: None,
+                timers: Registry::new(),
             }),
         }
     }
@@ -110,6 +149,7 @@ impl App {
 
     pub fn run_impl(
         this: &Rc<dyn IsApp>,
+        clock: &mut Option<MonoClock>,
         root: &Rc<dyn IsView>,
         init: Option<&mut dyn FnMut()>
     ) -> Result<u8, tvxaml_base_Error> {
@@ -119,6 +159,7 @@ impl App {
             this.app().data.borrow_mut().root = Some(old_root);
             panic!("app is already running");
         }
+        this.app().data.borrow_mut().clock = Some(clock.take().expect("no clock"));
         root._attach_to_app(this);
         init.map(|x| x());
         let res = loop {
@@ -146,8 +187,27 @@ impl App {
             };
             Self::render(root, &mut rp);
             let cursor = rp.cursor;
-            this.app().data.borrow_mut().cursor = cursor;
-            match screen.update(cursor, true) {
+            let time = {
+                let mut data = this.app().data.borrow_mut();
+                data.cursor = cursor;
+                data.clock.as_ref().unwrap().time()
+            };
+            loop {
+                let alarm = {
+                    let mut data = this.app().data.borrow_mut();
+                    let timer = data.timers.items().iter()
+                        .find(|(_, data)| time.delta_ms_u16(data.start).unwrap_or(u16::MAX) >= data.span_ms)
+                        .map(|(handle, _)| handle);
+                    timer.map(|x| data.timers.remove(x).alarm)
+                };
+                if let Some(alarm) = alarm {
+                    alarm();
+                } else {
+                    break;
+                }
+            }
+            let has_timers = !this.app().data.borrow().timers.items().is_empty();
+            match screen.update(cursor, !has_timers) {
                 Err(e) => break Err(e),
                 Ok(Some(Event::Resize)) => {
                     let app_rect = Rect { tl: Point { x: 0, y: 0 }, size: this.app().screen.borrow().size() };
@@ -180,7 +240,9 @@ impl App {
         this.focus(None, true);
         this.focus(None, false);
         root._detach_from_app();
-        this.app().data.borrow_mut().root = None;
+        let mut data = this.app().data.borrow_mut();
+        *clock = Some(data.clock.take().unwrap());
+        data.root = None;
         res
     }
 

@@ -20,7 +20,9 @@ int-vec-2d = { version = "0.2.0", features = ["serde"] }
 iter-identify_first_last = "0.2.3"
 itertools = { version = "0.14.0", default-features = false }
 no-std-xml = { git = "https://github.com/A1-Triard/no-std-xml.git", version = "0.8.20" }
+nonany = "0.3.0"
 serde = { version = "1.0.219", default-features = false, features = ["derive", "alloc"] }
+timer-no-std = "0.6.0"
 tvxaml-screen-base = { version = "0.1.0", path = "screen-base" }
 typetag = "0.2.20"
 unicode-width = "0.2.0"
