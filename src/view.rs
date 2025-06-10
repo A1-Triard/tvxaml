@@ -824,7 +824,8 @@ impl View {
                     (None, max_size, min_size)
                 } else {
                     let a_size = data.margin.shrink_rect_size(bounds.size).min(max_size).max(min_size);
-                    (Some((a_size, data.h_align, data.v_align, data.desired_size)), max_size, min_size)
+                    let d_size = data.margin.shrink_rect_size(data.desired_size);
+                    (Some((a_size, data.h_align, data.v_align, d_size)), max_size, min_size)
                 }
             };
             if let Some((a_size, h_align, v_align, desired_size)) = a_size {

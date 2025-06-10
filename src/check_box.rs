@@ -80,9 +80,9 @@ impl CheckBox {
             data: RefCell::new(CheckBoxData {
                 text: Rc::new(String::new()),
                 is_checked: false,
-                color: (Fg::White, Bg::Blue),
-                color_hotkey: (Fg::Yellow, Bg::Blue),
-                color_disabled: (Fg::DarkGray, Bg::Blue),
+                color: (Fg::LightGray, Bg::None),
+                color_hotkey: (Fg::White, Bg::None),
+                color_disabled: (Fg::DarkGray, Bg::None),
                 toggle_handler: Default::default(),
                 click_handler: Default::default(),
             }),
