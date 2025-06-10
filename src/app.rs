@@ -24,6 +24,8 @@ import! { pub app:
     use crate::view::IsView;
 }
 
+const FPS: u16 = 40;
+
 struct TimerData {
     start: MonoTime,
     span_ms: u16,
@@ -162,10 +164,27 @@ impl App {
         this.app().data.borrow_mut().clock = Some(clock.take().expect("no clock"));
         root._attach_to_app(this);
         init.map(|x| x());
+        let mut time = this.app().data.borrow().clock.as_ref().unwrap().time();
         let res = loop {
             if let Some(exit_code) = this.app().data.borrow_mut().exit_code.take() {
                 break Ok(exit_code);
             }
+            loop {
+                let alarm = {
+                    let mut data = this.app().data.borrow_mut();
+                    let time = data.clock.as_ref().unwrap().time();
+                    let timer = data.timers.items().iter()
+                        .find(|(_, data)| time.delta_ms_u16(data.start).unwrap_or(u16::MAX) >= data.span_ms)
+                        .map(|(handle, _)| handle);
+                    timer.map(|x| data.timers.remove(x).alarm)
+                };
+                if let Some(alarm) = alarm {
+                    alarm();
+                } else {
+                    break;
+                }
+            }
+            let has_timers = !this.app().data.borrow().timers.items().is_empty();
             let screen_size = this.app().screen.borrow().size();
             root.measure(Some(screen_size.x), Some(screen_size.y));
             root.arrange(Rect { tl: Point { x: 0, y: 0 }, size: screen_size });
@@ -187,26 +206,7 @@ impl App {
             };
             Self::render(root, &mut rp);
             let cursor = rp.cursor;
-            let time = {
-                let mut data = this.app().data.borrow_mut();
-                data.cursor = cursor;
-                data.clock.as_ref().unwrap().time()
-            };
-            loop {
-                let alarm = {
-                    let mut data = this.app().data.borrow_mut();
-                    let timer = data.timers.items().iter()
-                        .find(|(_, data)| time.delta_ms_u16(data.start).unwrap_or(u16::MAX) >= data.span_ms)
-                        .map(|(handle, _)| handle);
-                    timer.map(|x| data.timers.remove(x).alarm)
-                };
-                if let Some(alarm) = alarm {
-                    alarm();
-                } else {
-                    break;
-                }
-            }
-            let has_timers = !this.app().data.borrow().timers.items().is_empty();
+            this.app().data.borrow_mut().cursor = cursor;
             match screen.update(cursor, !has_timers) {
                 Err(e) => break Err(e),
                 Ok(Some(Event::Resize)) => {
@@ -235,6 +235,13 @@ impl App {
                     }
                 },
                 _ => { },
+            }
+            let data = this.app().data.borrow();
+            let clock = data.clock.as_ref().unwrap();
+            let ms = time.split_ms_u16(clock).unwrap_or(u16::MAX);
+            if has_timers {
+                assert!(FPS != 0 && u16::MAX / FPS > 8);
+                clock.sleep_ms_u16((1000 / FPS).saturating_sub(ms));
             }
         };
         this.focus(None, true);
