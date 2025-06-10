@@ -3,6 +3,7 @@
 use dynamic_cast::dyn_cast_rc;
 use std::process::ExitCode;
 use std::rc::Rc;
+use timer_no_std::MonoClock;
 use tvxaml::base::Key;
 use tvxaml::app::{App, AppExt};
 use tvxaml::template::Template;
@@ -24,6 +25,7 @@ fn start_and_print_err() -> u8 {
 }
 
 fn start() -> Result<u8, tvxaml::base::Error> {
+    let mut clock = Some(unsafe { MonoClock::new() });
     let screen = unsafe { tvxaml_screen_ncurses::init(None, None) }?;
     let xaml = include_str!("ui.xaml");
     let ui: Box<dyn Template> = xaml::from_str(xaml).unwrap();
@@ -31,14 +33,14 @@ fn start() -> Result<u8, tvxaml::base::Error> {
     let app = App::new(screen);
     let root: Rc<dyn IsView> = dyn_cast_rc(root).unwrap();
     {
-        let app = app.clone();
+        let app = Rc::downgrade(&app);
         root.handle_key(Some(Box::new(move |key, _| {
             if key == Key::Escape {
-                app.quit();
+                app.upgrade().unwrap().quit();
                 return true;
             }
             false
         })));
     }
-    app.run(&root, Some(&mut || app.focus_next(true)))
+    app.run(&mut clock, &root, Some(&mut || app.focus_next(true)))
 }

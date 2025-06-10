@@ -244,19 +244,28 @@ impl RadioButton {
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
         let is_enabled = this.is_enabled();
-        let focused = this.is_focused(Some(true));
+        let is_focused = this.is_focused(None);
+        let is_focused_primary = this.is_focused(Some(true));
         let this: Rc<dyn IsCheckBox> = dyn_cast_rc(this.clone()).unwrap();
         let is_checked = this.is_checked();
-        let color = if is_enabled { this.color() } else { this.color_disabled() };
-        rp.text(Point { x: 1, y: 0 }, color, if is_checked { "•" } else { " " });
+        let (color, color_hotkey) = match (is_enabled, is_focused) {
+            (true, false) => (this.color(), this.color_hotkey()),
+            (true, true) => (this.color_focused(), this.color_hotkey_focused()),
+            (false, false) => (this.color_disabled(), this.color_hotkey_disabled()),
+            (false, true) => (
+                (this.color_disabled().0, this.color_focused().1),
+                (this.color_hotkey_disabled().0, this.color_hotkey_focused().1)
+            ),
+        };
+        rp.text(Point { x: 1, y: 0 }, color, if is_checked { "*" } else { " " });
         rp.text(Point { x: 0, y: 0 }, color, "(");
         rp.text(Point { x: 2, y: 0 }, color, ")");
         let text = this.text();
         if !text.is_empty() {
             rp.text(Point { x: 3, y: 0 }, color, " ");
-            rp.label(Point { x: 4, y: 0 }, color, this.color_hotkey(), &text);
+            rp.label(Point { x: 4, y: 0 }, color, color_hotkey, &text);
         }
-        if focused { rp.cursor(Point { x: 1, y: 0 }); }
+        if is_focused_primary { rp.cursor(Point { x: 1, y: 0 }); }
     }
 }
 

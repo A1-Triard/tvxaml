@@ -15,7 +15,10 @@ struct CheckBoxData {
     is_checked: bool,
     color: (Fg, Bg),
     color_hotkey: (Fg, Bg),
+    color_focused: (Fg, Bg),
+    color_hotkey_focused: (Fg, Bg),
     color_disabled: (Fg, Bg),
+    color_hotkey_disabled: (Fg, Bg),
     toggle_handler: EventHandler<Option<Box<dyn FnMut()>>>,
     click_handler: EventHandler<Option<Box<dyn FnMut()>>>,
 }
@@ -42,9 +45,21 @@ pub struct CheckBox {
     #[non_virt]
     set_color_hotkey: fn(value: (Fg, Bg)),
     #[non_virt]
+    color_focused: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color_focused: fn(value: (Fg, Bg)),
+    #[non_virt]
+    color_hotkey_focused: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color_hotkey_focused: fn(value: (Fg, Bg)),
+    #[non_virt]
     color_disabled: fn() -> (Fg, Bg),
     #[non_virt]
     set_color_disabled: fn(value: (Fg, Bg)),
+    #[non_virt]
+    color_hotkey_disabled: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color_hotkey_disabled: fn(value: (Fg, Bg)),
     #[over]
     is_enabled_changed: (),
     #[over]
@@ -82,7 +97,10 @@ impl CheckBox {
                 is_checked: false,
                 color: (Fg::LightGray, Bg::None),
                 color_hotkey: (Fg::White, Bg::None),
+                color_focused: (Fg::White, Bg::None),
+                color_hotkey_focused: (Fg::Yellow, Bg::None),
                 color_disabled: (Fg::DarkGray, Bg::None),
+                color_hotkey_disabled: (Fg::LightGray, Bg::None),
                 toggle_handler: Default::default(),
                 click_handler: Default::default(),
             }),
@@ -147,12 +165,39 @@ impl CheckBox {
         this.invalidate_render();
     }
 
+    pub fn color_focused_impl(this: &Rc<dyn IsCheckBox>) -> (Fg, Bg) {
+        this.check_box().data.borrow().color_focused
+    }
+
+    pub fn set_color_focused_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
+        this.check_box().data.borrow_mut().color_focused = value;
+        this.invalidate_render();
+    }
+
+    pub fn color_hotkey_focused_impl(this: &Rc<dyn IsCheckBox>) -> (Fg, Bg) {
+        this.check_box().data.borrow().color_hotkey_focused
+    }
+
+    pub fn set_color_hotkey_focused_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
+        this.check_box().data.borrow_mut().color_hotkey_focused = value;
+        this.invalidate_render();
+    }
+
     pub fn color_disabled_impl(this: &Rc<dyn IsCheckBox>) -> (Fg, Bg) {
         this.check_box().data.borrow().color_disabled
     }
 
     pub fn set_color_disabled_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
         this.check_box().data.borrow_mut().color_disabled = value;
+        this.invalidate_render();
+    }
+
+    pub fn color_hotkey_disabled_impl(this: &Rc<dyn IsCheckBox>) -> (Fg, Bg) {
+        this.check_box().data.borrow().color_hotkey_disabled
+    }
+
+    pub fn set_color_hotkey_disabled_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
+        this.check_box().data.borrow_mut().color_hotkey_disabled = value;
         this.invalidate_render();
     }
 
@@ -178,25 +223,32 @@ impl CheckBox {
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
         let is_enabled = this.is_enabled();
-        let focused = this.is_focused(Some(true));
+        let is_focused = this.is_focused(None);
+        let is_focused_primary = this.is_focused(Some(true));
         let this: Rc<dyn IsCheckBox> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.check_box().data.borrow();
-        let color = if is_enabled { data.color } else { data.color_disabled };
+        let (color, color_hotkey) = match (is_enabled, is_focused) {
+            (true, true) => (data.color_focused, data.color_hotkey_focused),
+            (true, false) => (data.color, data.color_hotkey),
+            (false, true) => (
+                (data.color_disabled.0, data.color_focused.1),
+                (data.color_hotkey_disabled.0, data.color_focused.1)
+            ),
+            (false, false) => (data.color_disabled, data.color_hotkey_disabled),
+        };
         rp.text(Point { x: 1, y: 0 }, color, if data.is_checked { "x" } else { " " });
         rp.text(Point { x: 0, y: 0 }, color, "[");
         rp.text(Point { x: 2, y: 0 }, color, "]");
         if !data.text.is_empty() {
             rp.text(Point { x: 3, y: 0 }, color, " ");
-            rp.label(Point { x: 4, y: 0 }, color, data.color_hotkey, &data.text);
+            rp.label(Point { x: 4, y: 0 }, color, color_hotkey, &data.text);
         }
-        if focused { rp.cursor(Point { x: 1, y: 0 }); }
+        if is_focused_primary { rp.cursor(Point { x: 1, y: 0 }); }
     }
 
     pub fn is_focused_changed_impl(this: &Rc<dyn IsView>, primary_focus: bool) {
         View::is_focused_changed_impl(this, primary_focus);
-        if primary_focus {
-            this.invalidate_render();
-        }
+        this.invalidate_render();
     }
 
     pub fn handle_toggle_impl(this: &Rc<dyn IsCheckBox>, handler: Option<Box<dyn FnMut()>>) {
@@ -261,7 +313,16 @@ macro_rules! check_box_template {
                 pub color_hotkey: Option<($crate::base::Fg, $crate::base::Bg)>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
+                pub color_focused: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_hotkey_focused: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
                 pub color_disabled: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_hotkey_disabled: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -284,7 +345,10 @@ macro_rules! check_box_apply_template {
             $this.is_checked.map(|x| obj.set_is_checked(x));
             $this.color.map(|x| obj.set_color(x));
             $this.color_hotkey.map(|x| obj.set_color_hotkey(x));
+            $this.color_focused.map(|x| obj.set_color_focused(x));
+            $this.color_hotkey_focused.map(|x| obj.set_color_hotkey_focused(x));
             $this.color_disabled.map(|x| obj.set_color_disabled(x));
+            $this.color_hotkey_disabled.map(|x| obj.set_color_hotkey_disabled(x));
         }
     };
 }
