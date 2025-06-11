@@ -100,6 +100,8 @@ pub struct App {
     _remove_post_process: fn(view: &Rc<dyn IsView>),
     #[non_virt]
     focus_next: fn(primary_focus: bool),
+    #[non_virt]
+    focus_prev: fn(primary_focus: bool),
 }
 
 impl App {
@@ -247,7 +249,12 @@ impl App {
                                 } else {
                                     true
                                 };
-                                this.focus_next(primary_focus);
+                                let forward = match key {
+                                    Key::Left | Key::Up => false,
+                                    Key::Right | Key::Down => true,
+                                    _ => panic!(),
+                                };
+                                Self::move_focus(this, primary_focus, forward);
                             },
                             _ => { },
                         }
@@ -286,7 +293,7 @@ impl App {
         data.invalidated_rect = union;
     }
 
-    pub fn focus_next_impl(this: &Rc<dyn IsApp>, primary_focus: bool) {
+    fn move_focus(this: &Rc<dyn IsApp>, primary_focus: bool, forward: bool) {
         let sfr = {
             let data = this.app().data.borrow();
             let root = data.root.as_ref().expect("app is not running");
@@ -317,11 +324,12 @@ impl App {
         }
         let mut focus = focused.clone();
         loop {
+            let focus_visual_children_count = focus.visual_children_count();
             if 
-                   focus.visual_children_count() != 0
+                   focus_visual_children_count != 0
                 && (!primary_focus || !option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr)))
             {
-                focus = focus.visual_child(0);
+                focus = focus.visual_child(if forward { 0 } else { focus_visual_children_count - 1 });
             } else {
                 loop {
                     if
@@ -336,10 +344,10 @@ impl App {
                     let index = (0 .. children_count).into_iter()
                         .find(|&i| addr_eq(Rc::as_ptr(&parent.visual_child(i)), Rc::as_ptr(&focus)))
                         .unwrap();
-                    if index == children_count - 1 {
+                    if (forward && index == children_count - 1) || (!forward && index == 0) {
                         focus = parent;
                     } else {
-                        focus = parent.visual_child(index + 1);
+                        focus = parent.visual_child(if forward { index + 1 } else { index - 1});
                         break;
                     }
                 }
@@ -353,6 +361,14 @@ impl App {
                 return;
             }
         }
+    }
+
+    pub fn focus_prev_impl(this: &Rc<dyn IsApp>, primary_focus: bool) {
+        Self::move_focus(this, primary_focus, false);
+    }
+
+    pub fn focus_next_impl(this: &Rc<dyn IsApp>, primary_focus: bool) {
+        Self::move_focus(this, primary_focus, true);
     }
 
     pub fn focused_impl(this: &Rc<dyn IsApp>, primary_focus: bool) -> Option<Rc<dyn IsView>> {
