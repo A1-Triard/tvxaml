@@ -11,7 +11,7 @@
           </StackPanel>
         </Frame>
       </StackPanel>
-      <StackPanel Vertical="False" HAlign="Center">
+      <StackPanel Vertical="False" HAlign="Center" SecondaryFocusKeys="LeftRight">
         <Button Text="~O~K" />
         <Button Text="~C~ancel" Margin="3,0,0,0" />
       </StackPanel>

@@ -7,7 +7,7 @@ use timer_no_std::{MonoClock, MonoTime};
 use crate::arena::{Handle, Registry};
 use crate::base::{Vector, Point, Screen, Event, Key};
 use crate::render_port::RenderPort;
-use crate::view::{View, ViewExt};
+use crate::view::{View, ViewExt, SecondaryFocusKeys};
 
 fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where T: ?Sized, U: ?Sized {
     if p.is_none() && q.is_none() { return true; }
@@ -229,8 +229,27 @@ impl App {
                             let post_process = post_process.upgrade().unwrap();
                             if post_process.is_enabled() && post_process.post_process_key(key) { continue 'c; }
                         }
-                        if key == Key::Tab {
-                            this.focus_next(true);
+                        match key {
+                            Key::Tab => this.focus_next(true),
+                            Key::Left | Key::Right | Key::Up | Key::Down => {
+                                let primary_focus = if let Some(sfr) = root._secondary_focus_root() {
+                                    match (key, sfr.secondary_focus_keys()) {
+                                        (Key::Left, SecondaryFocusKeys::LeftRight) => false,
+                                        (Key::Right, SecondaryFocusKeys::LeftRight) => false,
+                                        (Key::Up, SecondaryFocusKeys::LeftRight) => true,
+                                        (Key::Down, SecondaryFocusKeys::LeftRight) => true,
+                                        (Key::Left, SecondaryFocusKeys::UpDown) => true,
+                                        (Key::Right, SecondaryFocusKeys::UpDown) => true,
+                                        (Key::Up, SecondaryFocusKeys::UpDown) => false,
+                                        (Key::Down, SecondaryFocusKeys::UpDown) => false,
+                                        _ => panic!(),
+                                    }
+                                } else {
+                                    true
+                                };
+                                this.focus_next(primary_focus);
+                            },
+                            _ => { },
                         }
                     }
                 },
@@ -268,12 +287,19 @@ impl App {
     }
 
     pub fn focus_next_impl(this: &Rc<dyn IsApp>, primary_focus: bool) {
+        let sfr = {
+            let data = this.app().data.borrow();
+            let root = data.root.as_ref().expect("app is not running");
+            root._secondary_focus_root()
+        };
         let focused = if let Some(focused) = this.focused(primary_focus) {
             focused
         } else {
-            let Some(root) = this.app().data.borrow().root.clone() else {
-                panic!("app in not running");
-            };
+            let mut root = this.app().data.borrow().root.clone().unwrap();
+            if !primary_focus {
+                let Some(sfr) = sfr.clone() else { return; };
+                root = sfr;
+            }
             if !root.is_enabled() { return; }
             if root.allow_focus() {
                 this.focus(Some(&root), primary_focus);
@@ -281,12 +307,30 @@ impl App {
             }
             root
         };
+        if primary_focus {
+            if let Some(sfr) = sfr.as_ref() {
+                if sfr.is_visual_ancestor_of(focused.clone()) { return; }
+            }
+        } else {
+            let Some(sfr) = sfr.as_ref() else { return; };
+            if !sfr.is_visual_ancestor_of(focused.clone()) { return; }
+        }
         let mut focus = focused.clone();
         loop {
-            if focus.visual_children_count() != 0 {
+            if 
+                   focus.visual_children_count() != 0
+                && (!primary_focus || !option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr)))
+            {
                 focus = focus.visual_child(0);
             } else {
-                while let Some(parent) = focus.visual_parent() {
+                loop {
+                    if
+                           !primary_focus
+                        && option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr))
+                    {
+                        break;
+                    }
+                    let Some(parent) = focus.visual_parent() else { break; };
                     let children_count = parent.visual_children_count();
                     debug_assert!(children_count != 0);
                     let index = (0 .. children_count).into_iter()
@@ -301,6 +345,9 @@ impl App {
                 }
             }
             if addr_eq(Rc::as_ptr(&focus), Rc::as_ptr(&focused)) { return; }
+            if primary_focus && option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr)) {
+                continue;
+            }
             if focus.allow_focus() && focus.is_enabled() {
                 this.focus(Some(&focus), primary_focus);
                 return;

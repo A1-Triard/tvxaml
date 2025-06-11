@@ -14,6 +14,13 @@ use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
 use crate::obj_col::ObjCol;
 
+fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where T: ?Sized, U: ?Sized {
+    if p.is_none() && q.is_none() { return true; }
+    let Some(p) = p else { return false; };
+    let Some(q) = q else { return false; };
+    addr_eq(p, q)
+}
+
 import! { pub layout:
     use [obj basic_oop::obj];
     use std::rc::Rc;
@@ -116,6 +123,10 @@ import! { pub view:
     use crate::obj_col::IsObjCol;
     use crate::render_port::RenderPort;
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize)]
+pub enum SecondaryFocusKeys { None, LeftRight, UpDown }
 
 bitflags! {
     #[derive(Default)]
@@ -303,6 +314,9 @@ macro_rules! view_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub is_enabled: Option<bool>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub secondary_focus_keys: Option<$crate::view::SecondaryFocusKeys>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -337,6 +351,7 @@ macro_rules! view_apply_template {
             $this.margin.map(|x| obj.set_margin(x)); 
             $this.allow_focus.map(|x| obj.set_allow_focus(x)); 
             $this.is_enabled.map(|x| obj.set_is_enabled(x));
+            $this.secondary_focus_keys.map(|x| obj.set_secondary_focus_keys(x));
         }
     };
 }
@@ -394,6 +409,8 @@ struct ViewData {
     is_focused_secondary: bool,
     preview_key_handler: EventHandler<Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>>,
     key_handler: EventHandler<Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>>,
+    secondary_focus_keys: SecondaryFocusKeys,
+    secondary_focus_root: rc::Weak<dyn IsView>,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -415,6 +432,8 @@ pub struct View {
     visual_parent: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
     set_visual_parent: fn(value: Option<&Rc<dyn IsView>>),
+    #[non_virt]
+    _secondary_focus_root: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
     width: fn() -> Option<i16>,
     #[non_virt]
@@ -519,6 +538,10 @@ pub struct View {
     handle_key: fn(handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>),
     #[non_virt]
     _raise_key: fn(key: Key) -> bool,
+    #[non_virt]
+    secondary_focus_keys: fn() -> SecondaryFocusKeys,
+    #[non_virt]
+    set_secondary_focus_keys: fn(value: SecondaryFocusKeys),
 }
 
 impl View {
@@ -558,6 +581,8 @@ impl View {
                 is_focused_secondary: false,
                 preview_key_handler: Default::default(),
                 key_handler: Default::default(),
+                secondary_focus_keys: SecondaryFocusKeys::None,
+                secondary_focus_root: <rc::Weak::<View>>::new(),
             })
         }
     }
@@ -660,6 +685,10 @@ impl View {
             *visual_parent = old_parent;
             panic!("visual parent is already set");
         }
+    }
+
+    pub fn _secondary_focus_root_impl(this: &Rc<dyn IsView>) -> Option<Rc<dyn IsView>> {
+        this.view().data.borrow().secondary_focus_root.upgrade()
     }
 
     pub fn width_impl(this: &Rc<dyn IsView>) -> Option<i16> {
@@ -928,6 +957,9 @@ impl View {
         if !is_enabled {
             Self::update_is_enabled(child, false);
         }
+        if let Some(child_secondary_focus_root) = child.view().data.borrow().secondary_focus_root.upgrade() {
+            Self::set_secondary_focus_root(this.clone(), &child_secondary_focus_root);
+        }
     }
 
     pub fn is_visual_ancestor_of_impl(this: &Rc<dyn IsView>, mut descendant: Rc<dyn IsView>) -> bool {
@@ -944,6 +976,9 @@ impl View {
     }
 
     pub fn remove_visual_child_impl(this: &Rc<dyn IsView>, child: &Rc<dyn IsView>) {
+        if let Some(child_secondary_focus_root) = child.view().data.borrow().secondary_focus_root.upgrade() {
+            Self::reset_secondary_focus_root(this.clone(), &child_secondary_focus_root);
+        }
         if let Some(app) = this.app() {
             if let Some(focused) = app.focused(true) {
                 if child.is_visual_ancestor_of(focused) {
@@ -1061,5 +1096,53 @@ impl View {
         handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>
     ) {
         this.view().data.borrow_mut().key_handler.set(handler);
+    }
+
+    pub fn secondary_focus_keys_impl(this: &Rc<dyn IsView>) -> SecondaryFocusKeys {
+        this.view().data.borrow().secondary_focus_keys
+    }
+
+    pub fn set_secondary_focus_keys_impl(this: &Rc<dyn IsView>, value: SecondaryFocusKeys) {
+        this.view().data.borrow_mut().secondary_focus_keys = value;
+        if value == SecondaryFocusKeys::None {
+            Self::reset_secondary_focus_root(this.clone(), this);
+        } else {
+            Self::set_secondary_focus_root(this.clone(), this);
+        }
+    }
+
+    fn set_secondary_focus_root(mut view: Rc<dyn IsView>, sfr: &Rc<dyn IsView>) {
+        loop {
+            let parent = {
+                let mut data = view.view().data.borrow_mut();
+                data.secondary_focus_root = Rc::downgrade(sfr);
+                data.visual_parent.upgrade()
+            };
+            if let Some(parent) = parent {
+                view = parent;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn reset_secondary_focus_root(mut view: Rc<dyn IsView>, sfr: &Rc<dyn IsView>) {
+        loop {
+            let parent = {
+                let mut data = view.view().data.borrow_mut();
+                let secondary_focus_root = data.secondary_focus_root.upgrade();
+                if !option_addr_eq(
+                    secondary_focus_root.as_ref().map(Rc::as_ptr),
+                    Some(Rc::as_ptr(sfr))
+                ) { break; }
+                data.secondary_focus_root = <rc::Weak::<View>>::new();
+                data.visual_parent.upgrade()
+            };
+            if let Some(parent) = parent {
+                view = parent;
+            } else {
+                break;
+            }
+        }
     }
 }
