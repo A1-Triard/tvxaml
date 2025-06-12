@@ -1,6 +1,9 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use std::mem::replace;
+use std::rc::{self};
+use crate::arena::{Registry, Handle};
 use crate::template::{Template, NameResolver};
 
 mod text_renderer {
@@ -233,6 +236,196 @@ mod text_renderer {
 
 use text_renderer::render_text;
 
+import! { pub text_trimming_marker:
+    use [view crate::view];
+}
+
+struct TextTrimmingMarkerData {
+    text: rc::Weak<dyn IsStaticText>,
+    handle: Option<Handle>,
+}
+
+#[class_unsafe(inherits_View)]
+pub struct TextTrimmingMarker {
+    data: RefCell<TextTrimmingMarkerData>,
+    #[non_virt]
+    text: fn() -> Option<Rc<dyn IsStaticText>>,
+    #[non_virt]
+    set_text: fn(value: Option<&Rc<dyn IsStaticText>>),
+    #[over]
+    measure_override: (),
+    #[over]
+    arrange_override: (),
+    #[over]
+    render: (),
+    #[over]
+    _attach_to_app: (),
+    #[over]
+    _detach_from_app: (),
+}
+
+impl TextTrimmingMarker {
+    pub fn new() -> Rc<dyn IsTextTrimmingMarker> {
+        let res: Rc<dyn IsTextTrimmingMarker>
+            = Rc::new(unsafe { Self::new_raw(TEXT_TRIMMING_MARKER_VTABLE.as_ptr()) });
+        res._init();
+        res
+    }
+
+    pub unsafe fn new_raw(vtable: Vtable) -> Self {
+        TextTrimmingMarker {
+            view: unsafe { View::new_raw(vtable) },
+            data: RefCell::new(TextTrimmingMarkerData {
+                text: <rc::Weak<StaticText>>::new(),
+                handle: None,
+            }),
+        }
+    }
+
+    pub fn text_impl(this: &Rc<dyn IsTextTrimmingMarker>) -> Option<Rc<dyn IsStaticText>> {
+        this.text_trimming_marker().data.borrow().text.upgrade()
+    }
+
+    pub fn set_text_impl(this: &Rc<dyn IsTextTrimmingMarker>, value: Option<&Rc<dyn IsStaticText>>) {
+        let (old_text, old_handle) = {  
+            let mut data = this.text_trimming_marker().data.borrow_mut();
+            let old_text = replace(
+                &mut data.text,
+                value.map_or_else(|| <rc::Weak<StaticText>>::new(), Rc::downgrade)
+            ).upgrade();
+            let old_handle = data.handle.take();
+            (old_text, old_handle)
+        };
+        if this.app().is_some() {
+            if let Some(old_text) = old_text {
+                old_text.static_text().data.borrow_mut().trimming_markers.remove(old_handle.unwrap());
+            }
+            if let Some(text) = value {
+                let handle = text.static_text().data.borrow_mut().trimming_markers.insert(
+                    |handle| (Rc::downgrade(this), handle)
+                );
+                this.text_trimming_marker().data.borrow_mut().handle = Some(handle);
+            }
+        } else {
+            debug_assert!(old_handle.is_none());
+        }
+    }
+
+    pub fn _attach_to_app_impl(this: &Rc<dyn IsView>, value: &Rc<dyn IsApp>) {
+        View::_attach_to_app_impl(this, value);
+        let this: Rc<dyn IsTextTrimmingMarker> = dyn_cast_rc(this.clone()).unwrap();
+        if let Some(text) = this.text() {
+            let handle = text.static_text().data.borrow_mut().trimming_markers.insert(
+                |handle| (Rc::downgrade(&this), handle)
+            );
+            this.text_trimming_marker().data.borrow_mut().handle = Some(handle);
+        }
+    }
+
+    pub fn _detach_from_app_impl(this: &Rc<dyn IsView>) {
+        {
+            let this: Rc<dyn IsTextTrimmingMarker> = dyn_cast_rc(this.clone()).unwrap();
+            if let Some(text) = this.text() {
+                let handle = this.text_trimming_marker().data.borrow_mut().handle.take();
+                text.static_text().data.borrow_mut().trimming_markers.remove(handle.unwrap());
+            }
+        }
+        View::_detach_from_app_impl(this);
+    }
+
+    pub fn measure_override_impl(_this: &Rc<dyn IsView>, _w: Option<i16>, _h: Option<i16>) -> Vector {
+        Vector { x: 1, y: 1 }
+    }
+
+    pub fn arrange_override_impl(_this: &Rc<dyn IsView>, _bounds: Rect) -> Vector {
+        Vector { x: 1, y: 1 }
+    }
+
+    pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
+        let this: Rc<dyn IsTextTrimmingMarker> = dyn_cast_rc(this.clone()).unwrap();
+        let (show_marker, color) = if let Some(text) = this.text() {
+            let data = text.static_text().data.borrow();
+            (data.show_trimming_marker, data.color)
+        } else {
+            (true, (Fg::Red, Bg::Green))
+        };
+        rp.text(Point { x: 0, y: 0 }, color, if show_marker { "►" } else { " " });
+    }
+}
+
+#[macro_export]
+macro_rules! text_trimming_marker_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
+            $($(
+                $(#[$field_attr:meta])*
+                pub $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::view_template! {
+            $(#[$attr])*
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
+                #[serde(default)]
+                #[serde(skip_serializing_if="String::is_empty")]
+                pub text: String,
+                $($(
+                    $(#[$field_attr])*
+                    pub $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+ 
+#[macro_export]
+macro_rules! text_trimming_marker_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::view_apply_template!($this, $instance, $names);
+        {
+            use $crate::static_text::TextTrimmingMarkerExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::static_text::IsTextTrimmingMarker>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $names.resolve(
+                $this.text.clone(),
+                Box::new(move |x| obj.set_text(Some(&$crate::dynamic_cast_dyn_cast_rc(x).unwrap())))
+            );
+        }
+    };
+}
+
+text_trimming_marker_template! {
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[serde(rename="TextTrimmingMarker")]
+    pub struct TextTrimmingMarkerTemplate in text_trimming_marker_template { }
+}
+
+#[typetag::serde(name="TextTrimmingMarker")]
+impl Template for TextTrimmingMarkerTemplate {
+    fn is_name_scope(&self) -> bool {
+        self.is_name_scope
+    }
+
+    fn name(&self) -> Option<&String> {
+        Some(&self.name)
+    }
+
+    fn create_instance(&self) -> Rc<dyn IsObj> {
+        TextTrimmingMarker::new()
+    }
+
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
+        let this = self;
+        text_trimming_marker_apply_template!(this, instance, names);
+    }
+}
+
 import! { pub static_text:
     use [view crate::view];
     use crate::base::{Fg, Bg, TextWrapping, TextAlign};
@@ -243,6 +436,7 @@ struct StaticTextData {
     text_align: TextAlign,
     text_wrapping: TextWrapping,
     show_trimming_marker: bool,
+    trimming_markers: Registry<rc::Weak<dyn IsTextTrimmingMarker>>,
     color: (Fg, Bg),
 }
 
@@ -261,10 +455,6 @@ pub struct StaticText {
     text_wrapping: fn() -> TextWrapping,
     #[non_virt]
     set_text_wrapping: fn(value: TextWrapping),
-    #[non_virt]
-    show_trimming_marker: fn() -> bool,
-    #[non_virt]
-    set_show_trimming_marker: fn(value: bool),
     #[non_virt]
     color: fn() -> (Fg, Bg),
     #[non_virt]
@@ -291,8 +481,9 @@ impl StaticText {
                 text: Rc::new(String::new()),
                 text_align: TextAlign::Left,
                 text_wrapping: TextWrapping::NoWrap,
-                show_trimming_marker: true,
-                color: (Fg::White, Bg::Blue),
+                show_trimming_marker: false,
+                trimming_markers: Registry::new(),
+                color: (Fg::LightGray, Bg::None),
             }),
         }
     }
@@ -326,15 +517,6 @@ impl StaticText {
         this.invalidate_render();
     }
 
-    pub fn show_trimming_marker_impl(this: &Rc<dyn IsStaticText>) -> bool {
-        this.static_text().data.borrow().show_trimming_marker
-    }
-
-    pub fn set_show_trimming_marker_impl(this: &Rc<dyn IsStaticText>, value: bool) {
-        this.static_text().data.borrow_mut().show_trimming_marker = value;
-        this.invalidate_render();
-    }
-
     pub fn color_impl(this: &Rc<dyn IsStaticText>) -> (Fg, Bg) {
         this.static_text().data.borrow().color
     }
@@ -356,7 +538,30 @@ impl StaticText {
         ).size
     }
 
-    pub fn arrange_override_impl(_this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
+    pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
+        let this: Rc<dyn IsStaticText> = dyn_cast_rc(this.clone()).unwrap();
+        let trimming_markers = {
+            let mut data = this.static_text().data.borrow_mut();
+            let text_bounds = render_text(
+                |_, _| { },
+                bounds,
+                data.text_align.into(),
+                data.text_wrapping,
+                &data.text
+            );
+            let show_trimming_marker = text_bounds.w() > bounds.w() || text_bounds.h() > bounds.h();
+            if show_trimming_marker != data.show_trimming_marker {
+                data.show_trimming_marker = show_trimming_marker;
+                Some(data.trimming_markers.items().clone())
+            } else {
+                None
+            }
+        };
+        if let Some(trimming_markers) = trimming_markers {
+            for (_, trimming_marker) in trimming_markers {
+                trimming_marker.upgrade().unwrap().invalidate_render();
+            }
+        }
         bounds.size
     }
 
@@ -410,9 +615,6 @@ macro_rules! static_text_template {
                 pub text_wrapping: Option<$crate::static_text::TextWrapping>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub show_trimming_marker: Option<bool>,
-                #[serde(default)]
-                #[serde(skip_serializing_if="Option::is_none")]
                 pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
@@ -435,7 +637,6 @@ macro_rules! static_text_apply_template {
             $this.text.as_ref().map(|x| obj.set_text($crate::alloc_rc_Rc::new(x.clone())));
             $this.text_align.map(|x| obj.set_text_align(x));
             $this.text_wrapping.map(|x| obj.set_text_wrapping(x));
-            $this.show_trimming_marker.map(|x| obj.set_show_trimming_marker(x));
             $this.color.map(|x| obj.set_color(x));
         }
     };
@@ -444,7 +645,7 @@ macro_rules! static_text_apply_template {
 static_text_template! {
     #[derive(serde::Serialize, serde::Deserialize, Default)]
     #[serde(rename="StaticText@Text")]
-    pub struct StaticTextTemplate in template { }
+    pub struct StaticTextTemplate in static_text_template { }
 }
 
 #[typetag::serde(name="StaticText")]
