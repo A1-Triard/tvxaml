@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use std::ptr::addr_eq;
 use crate::template::{Template, NameResolver};
 
 import! { pub background:
@@ -52,7 +53,11 @@ impl Background {
     }
 
     pub fn set_pattern_impl(this: &Rc<dyn IsBackground>, value: Rc<String>) {
-        this.background().data.borrow_mut().pattern = value;
+        {
+            let mut data = this.background().data.borrow_mut();
+            if addr_eq(Rc::as_ptr(&data.pattern), Rc::as_ptr(&value)) { return; }
+            data.pattern = value;
+        }
         this.invalidate_render();
     }
 
@@ -61,7 +66,11 @@ impl Background {
     }
 
     pub fn set_color_impl(this: &Rc<dyn IsBackground>, value: (Fg, Bg)) {
-        this.background().data.borrow_mut().color = value;
+        {
+            let mut data = this.background().data.borrow_mut();
+            if data.color == value { return; }
+            data.color = value;
+        }
         this.invalidate_render();
     }
 

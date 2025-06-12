@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
-use crate::base::label_width;
+use crate::base::{label_width, option_addr_eq};
 use crate::template::{Template, NameResolver};
 
 import! { pub radio_group:
@@ -160,6 +160,7 @@ impl RadioButton {
             &mut this.radio_button().data.borrow_mut().group,
             value.map_or_else(|| <rc::Weak::<RadioGroup>>::new(), Rc::downgrade)
         ).upgrade();
+        if option_addr_eq(old_group.as_ref().map(Rc::as_ptr), value.map(Rc::as_ptr)) { return; }
         if this.app().is_some() {
             if let Some(old_group) = old_group {
                 let mut buttons = old_group.radio_group().buttons.borrow_mut();

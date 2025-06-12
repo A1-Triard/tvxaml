@@ -2,6 +2,8 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use either::{Either, Left, Right};
 use std::cell::RefCell;
+use std::ptr::addr_eq;
+use crate::base::option_addr_eq;
 use crate::static_text::{StaticText, IsStaticText, StaticTextExt};
 use crate::template::{Template, NameResolver};
 
@@ -82,6 +84,7 @@ impl HeaderedDecorator {
     pub fn set_header_impl(this: &Rc<dyn IsHeaderedDecorator>, value: Option<Rc<dyn IsView>>) {
         let new_actual_header = {
             let mut data = this.headered_decorator().data.borrow_mut();
+            if option_addr_eq(data.header.as_ref().map(Rc::as_ptr), value.as_ref().map(Rc::as_ptr)) { return; }
             data.header = value.clone();
             if data.actual_header.as_ref().map_or(false, |x| x.is_right()) != value.is_some() {
                 if let Some(value) = value {
@@ -115,6 +118,7 @@ impl HeaderedDecorator {
     pub fn set_header_text_impl(this: &Rc<dyn IsHeaderedDecorator>, value: Rc<String>) {
         let new_actual_header = {
             let mut data = this.headered_decorator().data.borrow_mut();
+            if addr_eq(Rc::as_ptr(&data.header_text), Rc::as_ptr(&value)) { return; }
             data.header_text = value.clone();
             if data.actual_header.as_ref().map_or(false, |x| x.is_left()) != value.is_empty() {
                 if value.is_empty() {
@@ -159,15 +163,15 @@ impl HeaderedDecorator {
         if let Some(header) = header {
             let header = header.either(|x| { let y: Rc<dyn IsView> = x; y }, |x| x);
             this.remove_visual_child(&header);
-            header.set_visual_parent(None);
-            header.set_layout_parent(None);
+            header._set_visual_parent(None);
+            header._set_layout_parent(None);
         }
         this.headered_decorator().data.borrow_mut().actual_header = value.clone();
         let this: Rc<dyn IsView> = this.clone();
         if let Some(header) = value {
             let header = header.either(|x| { let y: Rc<dyn IsView> = x; y }, |x| x);
-            header.set_layout_parent(Some(&this));
-            header.set_visual_parent(Some(&this));
+            header._set_layout_parent(Some(&this));
+            header._set_visual_parent(Some(&this));
             this.add_visual_child(&header);
         }
         this.invalidate_measure();
@@ -178,9 +182,12 @@ impl HeaderedDecorator {
     }
 
     pub fn set_header_text_align_impl(this: &Rc<dyn IsHeaderedDecorator>, value: HAlign) {
-        let mut data = this.headered_decorator().data.borrow_mut();
-        data.header_text_align = value;
-        let header = data.actual_header.as_ref().and_then(|x| x.as_ref().left());
+        let header = {
+            let mut data = this.headered_decorator().data.borrow_mut();
+            data.header_text_align = value;
+            if data.header_text_align == value { return; }
+            data.actual_header.as_ref().and_then(|x| x.as_ref().left()).map(|x| x.clone())
+        };
         if let Some(header) = header {
             header.set_h_align(Some(value).into());
         }
@@ -192,6 +199,7 @@ impl HeaderedDecorator {
 
     pub fn _set_header_text_color_impl(this: &Rc<dyn IsHeaderedDecorator>, value: (Fg, Bg)) {
         let mut data = this.headered_decorator().data.borrow_mut();
+        if data.header_text_color == value { return; }
         data.header_text_color = value;
         let header = data.actual_header.as_ref().and_then(|x| x.as_ref().left());
         if let Some(header) = header {

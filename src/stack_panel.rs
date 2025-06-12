@@ -40,7 +40,8 @@ impl StackPanel {
     }
 
     pub fn set_vertical_impl(this: &Rc<dyn IsStackPanel>, value: bool) {
-        this.stack_panel().vertical.set(value);
+        let old = this.stack_panel().vertical.replace(value);
+        if old == value { return; }
         this.invalidate_measure();
     }
 

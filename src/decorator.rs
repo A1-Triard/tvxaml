@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use crate::base::option_addr_eq;
 use crate::template::{Template, NameResolver};
 
 import! { pub decorator:
@@ -43,17 +44,23 @@ impl Decorator {
     }
 
     pub fn set_child_impl(this: &Rc<dyn IsDecorator>, value: Option<Rc<dyn IsView>>) {
+        if option_addr_eq(
+            this.decorator().child.borrow().as_ref().map(Rc::as_ptr),
+            value.as_ref().map(Rc::as_ptr)
+        ) {
+            return;
+        }
         let child = this.decorator().child.borrow().clone();
         if let Some(child) = child {
             this.remove_visual_child(&child);
-            child.set_visual_parent(None);
-            child.set_layout_parent(None);
+            child._set_visual_parent(None);
+            child._set_layout_parent(None);
         }
         *this.decorator().child.borrow_mut() = value.clone();
         let this: Rc<dyn IsView> = this.clone();
         if let Some(child) = value {
-            child.set_layout_parent(Some(&this));
-            child.set_visual_parent(Some(&this));
+            child._set_layout_parent(Some(&this));
+            child._set_visual_parent(Some(&this));
             this.add_visual_child(&child);
         }
         this.invalidate_measure();

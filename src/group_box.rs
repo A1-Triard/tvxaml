@@ -61,7 +61,11 @@ impl GroupBox {
     }
 
     pub fn set_double_impl(this: &Rc<dyn IsGroupBox>, value: bool) {
-        this.group_box().data.borrow_mut().double = value;
+        {
+            let mut data = this.group_box().data.borrow_mut();
+            if data.double == value { return; }
+            data.double = value;
+        }
         this.invalidate_render();
     }
 
@@ -70,7 +74,11 @@ impl GroupBox {
     }
 
     pub fn set_color_impl(this: &Rc<dyn IsGroupBox>, value: (Fg, Bg)) {
-        this.group_box().data.borrow_mut().color = value;
+        {
+            let mut data = this.group_box().data.borrow_mut();
+            if data.color == value { return; }
+            data.color = value;
+        }
         this._set_header_text_color(value);
         this.invalidate_render();
     }

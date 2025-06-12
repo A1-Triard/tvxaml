@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use std::ptr::addr_eq;
 use crate::base::label_width;
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
@@ -122,7 +123,11 @@ impl CheckBox {
     }
 
     pub fn set_text_impl(this: &Rc<dyn IsCheckBox>, value: Rc<String>) {
-        this.check_box().data.borrow_mut().text = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if addr_eq(Rc::as_ptr(&data.text), Rc::as_ptr(&value)) { return; }
+            data.text = value;
+        }
         this.invalidate_measure();
         this.invalidate_render();
     }
@@ -152,7 +157,11 @@ impl CheckBox {
     }
 
     pub fn set_color_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
-        this.check_box().data.borrow_mut().color = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.color == value { return; }
+            data.color = value;
+        }
         this.invalidate_render();
     }
 
@@ -161,7 +170,11 @@ impl CheckBox {
     }
 
     pub fn set_color_hotkey_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
-        this.check_box().data.borrow_mut().color_hotkey = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.color_hotkey == value { return; }
+            data.color_hotkey = value;
+        }
         this.invalidate_render();
     }
 
@@ -170,7 +183,11 @@ impl CheckBox {
     }
 
     pub fn set_color_focused_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
-        this.check_box().data.borrow_mut().color_focused = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.color_focused == value { return; }
+            data.color_focused = value;
+        }
         this.invalidate_render();
     }
 
@@ -179,7 +196,11 @@ impl CheckBox {
     }
 
     pub fn set_color_hotkey_focused_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
-        this.check_box().data.borrow_mut().color_hotkey_focused = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.color_hotkey_focused == value { return; }
+            data.color_hotkey_focused = value;
+        }
         this.invalidate_render();
     }
 
@@ -188,7 +209,11 @@ impl CheckBox {
     }
 
     pub fn set_color_disabled_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
-        this.check_box().data.borrow_mut().color_disabled = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.color_disabled == value { return; }
+            data.color_disabled = value;
+        }
         this.invalidate_render();
     }
 
@@ -197,7 +222,11 @@ impl CheckBox {
     }
 
     pub fn set_color_hotkey_disabled_impl(this: &Rc<dyn IsCheckBox>, value: (Fg, Bg)) {
-        this.check_box().data.borrow_mut().color_hotkey_disabled = value;
+        {
+            let mut data = this.check_box().data.borrow_mut();
+            if data.color_hotkey_disabled == value { return; }
+            data.color_hotkey_disabled = value;
+        }
         this.invalidate_render();
     }
 

@@ -35,7 +35,8 @@ impl CanvasLayout {
     }
 
     pub fn set_tl_impl(this: &Rc<dyn IsCanvasLayout>, value: Point) {
-        this.canvas_layout().tl.set(value);
+        let old = this.canvas_layout().tl.replace(value);
+        if old == value { return; }
         this.owner().and_then(|x| x.layout_parent()).map(|x| x.invalidate_arrange());
     }
 }

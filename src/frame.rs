@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use std::ptr::addr_eq;
 use crate::base::{text_width, VAlign};
 use crate::template::{Template, NameResolver};
 
@@ -67,7 +68,11 @@ impl Frame {
     }
 
     pub fn set_text_impl(this: &Rc<dyn IsFrame>, value: Rc<String>) {
-        this.frame().data.borrow_mut().text = value;
+        {
+            let mut data = this.frame().data.borrow_mut();
+            if addr_eq(Rc::as_ptr(&data.text), Rc::as_ptr(&value)) { return; }
+            data.text = value;
+        }
         this.invalidate_render();
     }
 
@@ -76,7 +81,11 @@ impl Frame {
     }
 
     pub fn set_text_align_impl(this: &Rc<dyn IsFrame>, value: HAlign) {
-        this.frame().data.borrow_mut().text_align = value;
+        {
+            let mut data = this.frame().data.borrow_mut();
+            if data.text_align == value { return; }
+            data.text_align = value;
+        }
         this.invalidate_render();
     }
 
@@ -85,7 +94,11 @@ impl Frame {
     }
 
     pub fn set_double_impl(this: &Rc<dyn IsFrame>, value: bool) {
-        this.frame().data.borrow_mut().double = value;
+        {
+            let mut data = this.frame().data.borrow_mut();
+            if data.double == value { return; }
+            data.double = value;
+        }
         this.invalidate_render();
     }
 
@@ -94,7 +107,11 @@ impl Frame {
     }
 
     pub fn set_color_impl(this: &Rc<dyn IsFrame>, value: (Fg, Bg)) {
-        this.frame().data.borrow_mut().color = value;
+        {
+            let mut data = this.frame().data.borrow_mut();
+            if data.color == value { return; }
+            data.color = value;
+        }
         this.invalidate_render();
     }
 

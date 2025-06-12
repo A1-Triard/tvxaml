@@ -2,6 +2,8 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use either::{Either, Left, Right};
 use std::cell::RefCell;
+use std::ptr::addr_eq;
+use crate::base::option_addr_eq;
 use crate::static_text::{IsStaticText, StaticTextExt, StaticTextTemplate};
 use crate::template::{NameResolver, Names};
 
@@ -46,8 +48,10 @@ pub struct ContentPresenter {
     text_template: fn() -> Box<dyn Template>,
     #[over]
     _init: (),
+    #[non_virt]
+    update: fn(),
     #[virt]
-    update: fn(text_template: &Names),
+    update_override: fn(text_template: &Names),
 }
 
 impl ContentPresenter {
@@ -82,7 +86,17 @@ impl ContentPresenter {
         Box::new(StaticTextTemplate { name: "PART_Text".to_string(), .. Default::default() })
     }
 
-    pub fn update_impl(this: &Rc<dyn IsContentPresenter>, text_template: &Names) {
+    pub fn update_impl(this: &Rc<dyn IsContentPresenter>) {
+        let text_template = {
+            let data = this.content_presenter().data.borrow();
+            data.actual_content.as_ref().and_then(|x| x.as_ref().left()).map(|x| x.1.clone())
+        };
+        if let Some(text_template) = text_template {
+            this.update_override(&text_template);
+        }
+    }
+
+    pub fn update_override_impl(this: &Rc<dyn IsContentPresenter>, text_template: &Names) {
         let part_text: Rc<dyn IsStaticText>
             = dyn_cast_rc(
                 text_template.find("PART_Text").expect("PART_Text").clone()
@@ -102,6 +116,7 @@ impl ContentPresenter {
     pub fn set_content_impl(this: &Rc<dyn IsContentPresenter>, value: Option<Rc<dyn IsView>>) {
         let new_actual_content = {
             let mut data = this.content_presenter().data.borrow_mut();
+            if option_addr_eq(data.content.as_ref().map(Rc::as_ptr), value.as_ref().map(Rc::as_ptr)) { return; }
             data.content = value.clone();
             if data.actual_content.as_ref().map_or(false, |x| x.is_right()) != value.is_some() {
                 if let Some(value) = value {
@@ -133,6 +148,7 @@ impl ContentPresenter {
     pub fn set_text_impl(this: &Rc<dyn IsContentPresenter>, value: Rc<String>) {
         let new_actual_content = {
             let mut data = this.content_presenter().data.borrow_mut();
+            if addr_eq(Rc::as_ptr(&data.text), Rc::as_ptr(&value)) { return; }
             data.text = value.clone();
             if data.actual_content.as_ref().map_or(false, |x| x.is_left()) != value.is_empty() {
                 if value.is_empty() {
@@ -161,7 +177,7 @@ impl ContentPresenter {
                             let data = this.content_presenter().data.borrow();
                             data.actual_content.as_ref().unwrap().as_ref().left().unwrap().1.clone()
                         };
-                        this.update(&names);
+                        this.update_override(&names);
                     },
                 }
             } else {
@@ -180,15 +196,15 @@ impl ContentPresenter {
         };
         if let Some(content) = content {
             this.remove_visual_child(&content);
-            content.set_visual_parent(None);
-            content.set_layout_parent(None);
+            content._set_visual_parent(None);
+            content._set_layout_parent(None);
         }
         let content = value.as_ref().map(|x| x.as_ref().either(|x| x.0.clone(), |x| x.clone()));
         this.content_presenter().data.borrow_mut().actual_content = value;
         let this: Rc<dyn IsView> = this.clone();
         if let Some(content) = content {
-            content.set_layout_parent(Some(&this));
-            content.set_visual_parent(Some(&this));
+            content._set_layout_parent(Some(&this));
+            content._set_visual_parent(Some(&this));
             this.add_visual_child(&content);
         }
         this.invalidate_measure();
@@ -199,15 +215,12 @@ impl ContentPresenter {
     }
 
     pub fn set_text_color_impl(this: &Rc<dyn IsContentPresenter>, value: (Fg, Bg)) {
-        let text_template = {
+        {
             let mut data = this.content_presenter().data.borrow_mut();
             if data.text_color == value { return; }
             data.text_color = value;
-            data.actual_content.as_ref().and_then(|x| x.as_ref().left()).map(|x| x.1.clone())
         };
-        if let Some(text_template) = text_template {
-            this.update(&text_template);
-        }
+        this.update();
     }
 
     pub fn visual_children_count_impl(this: &Rc<dyn IsView>) -> usize {

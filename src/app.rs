@@ -5,16 +5,9 @@ use std::ptr::addr_eq;
 use std::rc::{self};
 use timer_no_std::{MonoClock, MonoTime};
 use crate::arena::{Handle, Registry};
-use crate::base::{Vector, Point, Screen, Event, Key};
+use crate::base::{Vector, Point, Screen, Event, Key, option_addr_eq};
 use crate::render_port::RenderPort;
 use crate::view::{View, ViewExt, SecondaryFocusKeys};
-
-fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where T: ?Sized, U: ?Sized {
-    if p.is_none() && q.is_none() { return true; }
-    let Some(p) = p else { return false; };
-    let Some(q) = q else { return false; };
-    addr_eq(p, q)
-}
 
 import! { pub app:
     use [obj basic_oop::obj];

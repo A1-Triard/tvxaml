@@ -1,5 +1,6 @@
 use iter_identify_first_last::IteratorIdentifyFirstLastExt;
 use serde::{Serialize, Deserialize};
+use std::ptr::addr_eq;
 
 pub use int_vec_2d::*;
 pub use tvxaml_screen_base::*;
@@ -69,4 +70,11 @@ impl From<TextAlign> for Option<HAlign> {
             TextAlign::Justify => None,
         }
     }
+}
+
+pub fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where T: ?Sized, U: ?Sized {
+    if p.is_none() && q.is_none() { return true; }
+    let Some(p) = p else { return false; };
+    let Some(q) = q else { return false; };
+    addr_eq(p, q)
 }

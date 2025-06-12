@@ -2,8 +2,10 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use std::mem::replace;
+use std::ptr::addr_eq;
 use std::rc::{self};
 use crate::arena::{Registry, Handle};
+use crate::base::option_addr_eq;
 use crate::template::{Template, NameResolver};
 
 mod text_renderer {
@@ -293,6 +295,7 @@ impl TextTrimmingMarker {
                 &mut data.text,
                 value.map_or_else(|| <rc::Weak<StaticText>>::new(), Rc::downgrade)
             ).upgrade();
+            if option_addr_eq(old_text.as_ref().map(Rc::as_ptr), value.map(Rc::as_ptr)) { return; }
             let old_handle = data.handle.take();
             (old_text, old_handle)
         };
@@ -493,7 +496,11 @@ impl StaticText {
     }
 
     pub fn set_text_impl(this: &Rc<dyn IsStaticText>, value: Rc<String>) {
-        this.static_text().data.borrow_mut().text = value;
+        {
+            let mut data = this.static_text().data.borrow_mut();
+            if addr_eq(Rc::as_ptr(&data.text), Rc::as_ptr(&value)) { return; }
+            data.text = value;
+        }
         this.invalidate_measure();
         this.invalidate_render();
     }
@@ -503,7 +510,11 @@ impl StaticText {
     }
 
     pub fn set_text_align_impl(this: &Rc<dyn IsStaticText>, value: TextAlign) {
-        this.static_text().data.borrow_mut().text_align = value;
+        {
+            let mut data = this.static_text().data.borrow_mut();
+            if data.text_align == value { return; }
+            data.text_align = value;
+        }
         this.invalidate_render();
     }
 
@@ -512,7 +523,11 @@ impl StaticText {
     }
 
     pub fn set_text_wrapping_impl(this: &Rc<dyn IsStaticText>, value: TextWrapping) {
-        this.static_text().data.borrow_mut().text_wrapping = value;
+        {
+            let mut data = this.static_text().data.borrow_mut();
+            if data.text_wrapping == value { return; }
+            data.text_wrapping = value;
+        }
         this.invalidate_measure();
         this.invalidate_render();
     }
@@ -522,7 +537,11 @@ impl StaticText {
     }
 
     pub fn set_color_impl(this: &Rc<dyn IsStaticText>, value: (Fg, Bg)) {
-        this.static_text().data.borrow_mut().color = value;
+        {
+            let mut data = this.static_text().data.borrow_mut();
+            if data.color == value { return; }
+            data.color = value;
+        }
         this.invalidate_render();
     }
 

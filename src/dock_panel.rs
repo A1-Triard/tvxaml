@@ -40,7 +40,8 @@ impl DockLayout {
     }
 
     pub fn set_dock_impl(this: &Rc<dyn IsDockLayout>, value: Dock) {
-        this.dock_layout().dock.set(value);
+        let old = this.dock_layout().dock.replace(value);
+        if old == value { return; }
         this.owner().and_then(|x| x.layout_parent()).map(|x| x.invalidate_measure());
     }
 }
@@ -147,7 +148,9 @@ impl DockPanel {
     }
 
     pub fn set_last_child_fill_impl(this: &Rc<dyn IsDockPanel>, value: bool) {
-        this.dock_panel().last_child_fill.set(value);
+        let old = this.dock_panel().last_child_fill.replace(value);
+        if old == value { return; }
+        this.invalidate_measure();
     }
 
     pub fn measure_override_impl(this: &Rc<dyn IsView>, mut w: Option<i16>, mut h: Option<i16>) -> Vector {

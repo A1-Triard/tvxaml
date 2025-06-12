@@ -92,7 +92,7 @@ pub struct Layout {
     #[non_virt]
     owner: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
-    set_owner: fn(value: Option<&Rc<dyn IsView>>),
+    _set_owner: fn(value: Option<&Rc<dyn IsView>>),
 }
 
 impl Layout {
@@ -111,7 +111,7 @@ impl Layout {
         this.layout().owner.borrow().upgrade()
     }
 
-    pub fn set_owner_impl(this: &Rc<dyn IsLayout>, value: Option<&Rc<dyn IsView>>) {
+    pub fn _set_owner_impl(this: &Rc<dyn IsLayout>, value: Option<&Rc<dyn IsView>>) {
         this.layout().owner.replace(value.map_or_else(|| <rc::Weak::<View>>::new(), Rc::downgrade));
     }
 }
@@ -428,11 +428,11 @@ pub struct View {
     #[non_virt]
     layout_parent: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
-    set_layout_parent: fn(value: Option<&Rc<dyn IsView>>),
+    _set_layout_parent: fn(value: Option<&Rc<dyn IsView>>),
     #[non_virt]
     visual_parent: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
-    set_visual_parent: fn(value: Option<&Rc<dyn IsView>>),
+    _set_visual_parent: fn(value: Option<&Rc<dyn IsView>>),
     #[non_virt]
     _secondary_focus_root: fn() -> Option<Rc<dyn IsView>>,
     #[non_virt]
@@ -599,14 +599,15 @@ impl View {
     }
 
     pub fn set_layout_impl(this: &Rc<dyn IsView>, value: Rc<dyn IsLayout>) {
-        value.set_owner(Some(this));
         let (old, parent) = {
             let mut data = this.view().data.borrow_mut();
-            let old = replace(&mut data.layout, value);
+            let old = replace(&mut data.layout, value.clone());
+            if addr_eq(Rc::as_ptr(&old), Rc::as_ptr(&value)) { return; }
             let parent = data.layout_parent.upgrade();
             (old, parent)
         };
-        old.set_owner(None);
+        old._set_owner(None);
+        value._set_owner(Some(this));
         parent.map(|x| x.invalidate_measure());
     }
 
@@ -658,7 +659,7 @@ impl View {
         this.view().data.borrow().layout_parent.upgrade()
     }
 
-    pub fn set_layout_parent_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsView>>) {
+    pub fn _set_layout_parent_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsView>>) {
         let set = value.is_some();
         let layout_parent = &mut this.view().data.borrow_mut().layout_parent;
         let old_parent = replace(
@@ -675,7 +676,7 @@ impl View {
         this.view().data.borrow().visual_parent.upgrade()
     }
 
-    pub fn set_visual_parent_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsView>>) {
+    pub fn _set_visual_parent_impl(this: &Rc<dyn IsView>, value: Option<&Rc<dyn IsView>>) {
         let set = value.is_some();
         let visual_parent = &mut this.view().data.borrow_mut().visual_parent;
         let old_parent = replace(
@@ -697,7 +698,11 @@ impl View {
     }
 
     pub fn set_width_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
-        this.view().data.borrow_mut().width = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.width == value { return; }
+            data.width = value;
+        }
         this.invalidate_measure();
     }
 
@@ -706,7 +711,11 @@ impl View {
     }
 
     pub fn set_height_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
-        this.view().data.borrow_mut().height = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.height == value { return; }
+            data.height = value;
+        }
         this.invalidate_measure();
     }
 
@@ -715,7 +724,11 @@ impl View {
     }
 
     pub fn set_min_size_impl(this: &Rc<dyn IsView>, value: Vector) {
-        this.view().data.borrow_mut().min_size = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.min_size == value { return; }
+            data.min_size = value;
+        }
         this.invalidate_measure();
     }
 
@@ -724,7 +737,11 @@ impl View {
     }
 
     pub fn set_max_width_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
-        this.view().data.borrow_mut().max_width = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.max_width == value { return; }
+            data.max_width = value;
+        }
         this.invalidate_measure();
     }
 
@@ -733,7 +750,11 @@ impl View {
     }
 
     pub fn set_max_height_impl(this: &Rc<dyn IsView>, value: Option<i16>) {
-        this.view().data.borrow_mut().max_height = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.max_height == value { return; }
+            data.max_height = value;
+        }
         this.invalidate_measure();
     }
 
@@ -742,7 +763,11 @@ impl View {
     }
 
     pub fn set_h_align_impl(this: &Rc<dyn IsView>, value: ViewHAlign) {
-        this.view().data.borrow_mut().h_align = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.h_align == value { return; }
+            data.h_align = value;
+        }
         this.invalidate_measure();
     }
 
@@ -751,7 +776,11 @@ impl View {
     }
 
     pub fn set_v_align_impl(this: &Rc<dyn IsView>, value: ViewVAlign) {
-        this.view().data.borrow_mut().v_align = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.v_align == value { return; }
+            data.v_align = value;
+        }
         this.invalidate_measure();
     }
 
@@ -760,7 +789,11 @@ impl View {
     }
 
     pub fn set_margin_impl(this: &Rc<dyn IsView>, value: Thickness) {
-        this.view().data.borrow_mut().margin = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.margin == value { return; }
+            data.margin = value;
+        }
         this.invalidate_measure();
     }
 
@@ -1104,7 +1137,11 @@ impl View {
     }
 
     pub fn set_secondary_focus_keys_impl(this: &Rc<dyn IsView>, value: SecondaryFocusKeys) {
-        this.view().data.borrow_mut().secondary_focus_keys = value;
+        {
+            let mut data = this.view().data.borrow_mut();
+            if data.secondary_focus_keys == value { return; }
+            data.secondary_focus_keys = value;
+        }
         if value == SecondaryFocusKeys::None {
             Self::reset_secondary_focus_root(this.clone(), this);
         } else {
