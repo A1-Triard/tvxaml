@@ -2,6 +2,7 @@ use basic_oop::obj::IsObj;
 use hashbrown::HashMap;
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct Names {
     map: HashMap<String, Rc<dyn IsObj>>,
 }
