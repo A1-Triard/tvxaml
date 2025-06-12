@@ -68,7 +68,7 @@ impl ContentPresenter {
             data: RefCell::new(ContentPresenterData {
                 content: None,
                 text: Rc::new(String::new()),
-                text_color: (Fg::Red, Bg::Green),
+                text_color: (Fg::LightGray, Bg::None),
                 actual_content: None,
                 text_template: None,
             }),
