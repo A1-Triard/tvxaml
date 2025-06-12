@@ -118,9 +118,9 @@ mod text_renderer {
                     Range1d { start: bounds.l(), end: x }
                 } else {
                     let min_width = line.iter().map(|x| x.2).fold(0i16, |s, w| s.wrapping_add(w));
-                    let spaces_count = ((bounds.w() as u16) - (min_width as u16)) as usize;
-                    let spaces_per_run = spaces_count / space_runs_count;
-                    let spaces_runs_head_len = spaces_count % space_runs_count;
+                    let spaces_count = ((bounds.w() as u16).saturating_sub(min_width as u16)) as usize;
+                    let spaces_per_run = min(spaces_count / space_runs_count, 1);
+                    let spaces_runs_head_len = spaces_count.saturating_sub(spaces_per_run * space_runs_count);
                     let mut x = bounds.l();
                     for (n, run) in line.into_iter().enumerate() {
                         if n == 0 || !run.0 {
@@ -162,7 +162,9 @@ mod text_renderer {
                     let space_width = if x.0 { 1i16 } else { 0 };
                     space_width.wrapping_add(x.2)
                 }).fold(0i16, |s, w| s.wrapping_add(w));
-                let start = bounds.l().wrapping_add((((bounds.w() as u16) - (line_width as u16)) / 2) as i16);
+                let start = bounds.l().wrapping_add(
+                    (((bounds.w() as u16).saturating_sub(line_width as u16)) / 2) as i16
+                );
                 let mut x = start;
                 for run in line {
                     if run.0 {
@@ -240,6 +242,7 @@ struct StaticTextData {
     text: Rc<String>,
     text_align: TextAlign,
     text_wrapping: TextWrapping,
+    show_trimming_marker: bool,
     color: (Fg, Bg),
 }
 
@@ -258,6 +261,10 @@ pub struct StaticText {
     text_wrapping: fn() -> TextWrapping,
     #[non_virt]
     set_text_wrapping: fn(value: TextWrapping),
+    #[non_virt]
+    show_trimming_marker: fn() -> bool,
+    #[non_virt]
+    set_show_trimming_marker: fn(value: bool),
     #[non_virt]
     color: fn() -> (Fg, Bg),
     #[non_virt]
@@ -284,6 +291,7 @@ impl StaticText {
                 text: Rc::new(String::new()),
                 text_align: TextAlign::Left,
                 text_wrapping: TextWrapping::NoWrap,
+                show_trimming_marker: true,
                 color: (Fg::White, Bg::Blue),
             }),
         }
@@ -318,6 +326,15 @@ impl StaticText {
         this.invalidate_render();
     }
 
+    pub fn show_trimming_marker_impl(this: &Rc<dyn IsStaticText>) -> bool {
+        this.static_text().data.borrow().show_trimming_marker
+    }
+
+    pub fn set_show_trimming_marker_impl(this: &Rc<dyn IsStaticText>, value: bool) {
+        this.static_text().data.borrow_mut().show_trimming_marker = value;
+        this.invalidate_render();
+    }
+
     pub fn color_impl(this: &Rc<dyn IsStaticText>) -> (Fg, Bg) {
         this.static_text().data.borrow().color
     }
@@ -348,13 +365,19 @@ impl StaticText {
         let this: Rc<dyn IsStaticText> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.static_text().data.borrow();
         rp.fill_bg(data.color);
-        render_text(
+        let text_bounds = render_text(
             |p, s| rp.text(p, data.color, s),
             bounds,
             data.text_align.into(),
             data.text_wrapping,
             &data.text
         );
+        if
+               data.show_trimming_marker
+            && (text_bounds.w() as u16) > (bounds.w() as u16) || (text_bounds.h() as u16) > (bounds.h() as u16)
+        {
+            rp.text(bounds.br_inner(), data.color, "►");
+        }
     }
 }
 
@@ -387,6 +410,9 @@ macro_rules! static_text_template {
                 pub text_wrapping: Option<$crate::static_text::TextWrapping>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
+                pub show_trimming_marker: Option<bool>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
                 pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
                 $($(
                     $(#[$field_attr])*
@@ -409,6 +435,7 @@ macro_rules! static_text_apply_template {
             $this.text.as_ref().map(|x| obj.set_text($crate::alloc_rc_Rc::new(x.clone())));
             $this.text_align.map(|x| obj.set_text_align(x));
             $this.text_wrapping.map(|x| obj.set_text_wrapping(x));
+            $this.show_trimming_marker.map(|x| obj.set_show_trimming_marker(x));
             $this.color.map(|x| obj.set_color(x));
         }
     };
