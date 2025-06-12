@@ -4,12 +4,12 @@
       <StackPanel>
         <CheckBox Text="Option ~1~" />
         <CheckBox Text="Option ~2~" IsChecked="True" />
-        <Frame Text="Radio Buttons">
+        <GroupBox HeaderText="Radio Buttons xxxxxxxxxxxxxxxxxxx">
           <StackPanel Margin="1,0,1,0">
             <RadioButton Text="~R~adio Button 1" IsChecked="True" Group="A" />
             <RadioButton Text="R~a~dio Button 2" Group="A" />
           </StackPanel>
-        </Frame>
+        </GroupBox>
       </StackPanel>
       <StackPanel Vertical="False" HAlign="Center" SecondaryFocusKeys="LeftRight">
         <Button Text="~O~K" />

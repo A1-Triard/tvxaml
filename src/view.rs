@@ -9,6 +9,7 @@ use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
 use std::str::FromStr;
+use crate::base::{HAlign, VAlign};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
@@ -118,7 +119,7 @@ impl Layout {
 import! { pub view:
     use [obj basic_oop::obj];
     use std::rc::Rc;
-    use crate::base::{Key, Vector, HAlign, VAlign, Rect, Thickness, Point};
+    use crate::base::{Key, Vector, Rect, Thickness, Point};
     use crate::app::IsApp;
     use crate::obj_col::IsObjCol;
     use crate::render_port::RenderPort;

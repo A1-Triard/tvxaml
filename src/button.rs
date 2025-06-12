@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use crate::app::Timer;
-use crate::base::label_width;
+use crate::base::{label_width, HAlign, VAlign};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 

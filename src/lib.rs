@@ -30,3 +30,5 @@ pub mod check_box;
 pub mod radio_button;
 pub mod background;
 pub mod button;
+pub mod headered_decorator;
+pub mod group_box;

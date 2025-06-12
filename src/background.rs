@@ -26,6 +26,8 @@ pub struct Background {
     set_color: fn(value: (Fg, Bg)),
     #[over]
     render: (),
+    #[over]
+    arrange_override: (),
 }
 
 impl Background {
@@ -61,6 +63,11 @@ impl Background {
     pub fn set_color_impl(this: &Rc<dyn IsBackground>, value: (Fg, Bg)) {
         this.background().data.borrow_mut().color = value;
         this.invalidate_render();
+    }
+
+    pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
+        Decorator::arrange_override_impl(this, bounds);
+        bounds.size
     }
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {

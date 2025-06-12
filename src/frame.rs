@@ -1,12 +1,12 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
-use crate::base::text_width;
+use crate::base::{text_width, VAlign};
 use crate::template::{Template, NameResolver};
 
 import! { pub frame:
     use [decorator crate::decorator];
-    use crate::base::{Fg, Bg};
+    use crate::base::{Fg, Bg, HAlign};
 }
 
 struct FrameData {

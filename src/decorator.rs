@@ -84,8 +84,10 @@ impl Decorator {
         let this: Rc<dyn IsDecorator> = dyn_cast_rc(this.clone()).unwrap();
         if let Some(child) = this.decorator().child.borrow().clone() {
             child.arrange(bounds);
+            child.render_bounds().size
+        } else {
+            Vector::null()
         }
-        bounds.size
     }
 }
 
