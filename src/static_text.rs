@@ -589,19 +589,13 @@ impl StaticText {
         let this: Rc<dyn IsStaticText> = dyn_cast_rc(this.clone()).unwrap();
         let data = this.static_text().data.borrow();
         rp.fill_bg(data.color);
-        let text_bounds = render_text(
+        render_text(
             |p, s| rp.text(p, data.color, s),
             bounds,
             data.text_align.into(),
             data.text_wrapping,
             &data.text
         );
-        if
-               data.show_trimming_marker
-            && (text_bounds.w() as u16) > (bounds.w() as u16) || (text_bounds.h() as u16) > (bounds.h() as u16)
-        {
-            rp.text(bounds.br_inner(), data.color, "►");
-        }
     }
 }
 

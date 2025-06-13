@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use crate::base::TextWrapping;
 use crate::border::{IsBorder, BorderExt, BorderTemplate};
 use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
-use crate::pile_panel::PilePanelTemplate;
+use crate::adorners_panel::AdornersPanelTemplate;
 use crate::template::{Template, NameResolver};
 
 import! { pub group_box:
@@ -117,7 +117,7 @@ impl GroupBox {
     }
 
     pub fn template_impl(_this: &Rc<dyn IsControl>) -> Box<dyn Template> {
-        Box::new(PilePanelTemplate {
+        Box::new(AdornersPanelTemplate {
             children: vec![
                 Box::new(BorderTemplate {
                     name: "PART_Border".to_string(),
@@ -132,6 +132,7 @@ impl GroupBox {
                     name: "PART_HeaderPresenter".to_string(),
                     show_text_trimming_marker: Some(true),
                     margin: Some(Thickness::new(1, 0, 1, 0)),
+                    v_align: Some(ViewVAlign::Top),
                     .. Default::default()
                 }),
             ],

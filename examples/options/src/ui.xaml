@@ -4,7 +4,10 @@
       <StackPanel>
         <CheckBox Text="Option ~1~" />
         <CheckBox Text="Option ~2~" IsChecked="True" />
-        <GroupBox HeaderText="Radio Buttons">
+        <GroupBox>
+          <GroupBox.Header>
+            <CheckBox Text="Radio Buttons" />
+          </GroupBox.Header>
           <StackPanel Margin="1,0,1,0">
             <RadioButton Text="~R~adio Button 1" IsChecked="True" Group="A" />
             <RadioButton Text="R~a~dio Button 2" Group="A" />
