@@ -14,7 +14,6 @@ import! { pub headered_content_control:
 struct HeaderedContentControlData {
     header: Option<Rc<dyn IsView>>,
     header_text: Rc<String>,
-    header_align: ViewHAlign,
 }
 
 #[class_unsafe(inherits_ContentControl)]
@@ -28,10 +27,6 @@ pub struct HeaderedContentControl {
     header_text: fn() -> Rc<String>,
     #[non_virt]
     set_header_text: fn(value: Rc<String>),
-    #[non_virt]
-    header_align: fn() -> ViewHAlign,
-    #[non_virt]
-    set_header_align: fn(value: ViewHAlign),
     #[over]
     template: (),
     #[over]
@@ -52,7 +47,6 @@ impl HeaderedContentControl {
             data: RefCell::new(HeaderedContentControlData {
                 header: None,
                 header_text: Rc::new(String::new()),
-                header_align: ViewHAlign::Left,
             }),
         }
     }
@@ -79,19 +73,6 @@ impl HeaderedContentControl {
             let mut data = this.headered_content_control().data.borrow_mut();
             if addr_eq(Rc::as_ptr(&data.header_text), Rc::as_ptr(&value)) { return; }
             data.header_text = value;
-        }
-        this.update();
-    }
-
-    pub fn header_align_impl(this: &Rc<dyn IsHeaderedContentControl>) -> ViewHAlign {
-        this.headered_content_control().data.borrow().header_align
-    }
-
-    pub fn set_header_align_impl(this: &Rc<dyn IsHeaderedContentControl>, value: ViewHAlign) {
-        {
-            let mut data = this.headered_content_control().data.borrow_mut();
-            if data.header_align == value { return; }
-            data.header_align = value;
         }
         this.update();
     }
@@ -123,13 +104,12 @@ impl HeaderedContentControl {
             = dyn_cast_rc(
                 template.find("PART_HeaderPresenter").expect("PART_HeaderPresenter").clone()
             ).expect("PART_HeaderPresenter: ContentPresenter");
-        let (header, text, align) = {
+        let (header, text) = {
             let data = this.headered_content_control().data.borrow();
-            (data.header.clone(), data.header_text.clone(), data.header_align)
+            (data.header.clone(), data.header_text.clone())
         };
         part_header_presenter.set_content(header);
         part_header_presenter.set_text(text);
-        part_header_presenter.set_h_align(align);
     }
 }
 
@@ -157,9 +137,6 @@ macro_rules! headered_content_control_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub header_text: Option<String>,
-                #[serde(default)]
-                #[serde(skip_serializing_if="Option::is_none")]
-                pub header_align: Option<$crate::view::ViewHAlign>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -182,7 +159,6 @@ macro_rules! headered_content_control_apply_template {
                 obj.set_header(Some($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap()))
             );
             $this.header_text.as_ref().map(|x| obj.set_header_text($crate::alloc_rc_Rc::new(x.clone())));
-            $this.header_align.map(|x| obj.set_header_align(x))
         }
     };
 }
