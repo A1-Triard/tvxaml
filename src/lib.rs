@@ -35,3 +35,4 @@ pub mod group_box;
 pub mod content_presenter;
 pub mod control;
 pub mod content_control;
+pub mod headered_content_control;

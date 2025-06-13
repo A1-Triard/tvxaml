@@ -59,17 +59,17 @@ impl ContentControl {
 
     pub fn update_override_impl(this: &Rc<dyn IsControl>, template: &Names) {
         let this: Rc<dyn IsContentControl> = dyn_cast_rc(this.clone()).unwrap();
-        let part_presenter: Rc<dyn IsContentPresenter>
+        let part_content_presenter: Rc<dyn IsContentPresenter>
             = dyn_cast_rc(
-                template.find("PART_Presenter").expect("PART_Presenter").clone()
-            ).expect("PART_Presenter: ContentPresenter");
+                template.find("PART_ContentPresenter").expect("PART_ContentPresenter").clone()
+            ).expect("PART_ContentPresenter: ContentPresenter");
         let (content, text, text_color) = {
             let data = this.content_control().data.borrow();
             (data.content.clone(), data.text.clone(), data.text_color)
         };
-        part_presenter.set_content(content);
-        part_presenter.set_text(text);
-        part_presenter.set_text_color(text_color);
+        part_content_presenter.set_content(content);
+        part_content_presenter.set_text(text);
+        part_content_presenter.set_text_color(text_color);
     }
 
     pub fn content_impl(this: &Rc<dyn IsContentControl>) -> Option<Rc<dyn IsView>> {
@@ -115,7 +115,7 @@ impl ContentControl {
 
     pub fn template_impl(_this: &Rc<dyn IsControl>) -> Box<dyn Template> {
         Box::new(ContentPresenterTemplate {
-            name: "PART_Presenter".to_string(),
+            name: "PART_ContentPresenter".to_string(),
             .. Default::default()
         })
     }
