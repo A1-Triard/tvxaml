@@ -9,18 +9,11 @@ use std::mem::replace;
 use std::ptr::addr_eq;
 use std::rc::{self};
 use std::str::FromStr;
-use crate::base::{HAlign, VAlign};
+use crate::base::{HAlign, VAlign, option_addr_eq};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 use crate::app::{App, AppExt};
 use crate::obj_col::ObjCol;
-
-fn option_addr_eq<T, U>(p: Option<*const T>, q: Option<*const U>) -> bool where T: ?Sized, U: ?Sized {
-    if p.is_none() && q.is_none() { return true; }
-    let Some(p) = p else { return false; };
-    let Some(q) = q else { return false; };
-    addr_eq(p, q)
-}
 
 import! { pub layout:
     use [obj basic_oop::obj];
