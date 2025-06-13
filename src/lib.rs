@@ -37,3 +37,4 @@ pub mod control;
 pub mod content_control;
 pub mod headered_content_control;
 pub mod border;
+pub mod pile_panel;
