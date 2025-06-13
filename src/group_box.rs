@@ -117,7 +117,7 @@ impl GroupBox {
         };
         part_border.set_color(color);
         part_border.set_double(double);
-        part_header_presenter.set_h_align(header_align);
+        part_padding.set_h_align(header_align);
         part_header_presenter.set_text_color(color);
         part_padding.set_color(color);
     }
