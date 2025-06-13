@@ -10,6 +10,28 @@ pub struct RenderPort<'a> {
 }
 
 impl<'a> RenderPort<'a> {
+    pub fn text_in_rect(&mut self, rect: Rect, color: (Fg, Bg), text: &str) {
+        let screen_size = self.screen.size();
+        let p = rect.tl.offset(self.offset);
+        let bounds = rect.intersect(self.bounds);
+        if !bounds.v_range().contains(p.y) { return; }
+        if !self.invalidated_rect.v_range().contains(p.y) { return; }
+        if p.y < 0 || p.y >= screen_size.y { return; }
+        if p.x >= bounds.r() || p.x >= self.invalidated_rect.r() { return; } // don't screen do same check?
+        let rendered = self.screen.out(
+            p, color.0, color.1, text, bounds.h_range(), self.invalidated_rect.h_range()
+        );
+        self.invalidated_rect = self.invalidated_rect.union_intersect(
+            Rect::from_h_v_ranges(rendered, Range1d { start: p.y, end: p.y.wrapping_add(1) }),
+            Rect { tl: Point { x: 0, y: 0 }, size: screen_size }
+        );
+        if let Some(cursor) = self.cursor {
+            if p.y == cursor.y && rendered.contains(cursor.x) {
+                self.cursor = None;
+            }
+        }
+    }
+
     pub fn text(&mut self, p: Point, color: (Fg, Bg), text: &str) {
         let screen_size = self.screen.size();
         let p = p.offset(self.offset);
@@ -49,6 +71,12 @@ impl<'a> RenderPort<'a> {
         }
     }
 
+    pub fn fill_rect(&mut self, rect: Rect, mut f: impl FnMut(&mut Self, Point)) {
+        for p in rect.intersect(self.bounds.intersect(self.invalidated_rect)).points() {
+            f(self, p.offset(-self.offset));
+        }
+    }
+
     pub fn label(&mut self, mut p: Point, color: (Fg, Bg), color_hotkey: (Fg, Bg), text: &str) {
         let mut hotkey = false;
         for (first, last, text) in text.split('~').identify_first_last() {
@@ -66,6 +94,10 @@ impl<'a> RenderPort<'a> {
 
     pub fn fill_bg(&mut self, color: (Fg, Bg)) {
         self.fill(|rp, p| rp.text(p, color, " "));
+    }
+
+    pub fn fill_bg_rect(&mut self, rect: Rect, color: (Fg, Bg)) {
+        self.fill_rect(rect, |rp, p| rp.text(p, color, " "));
     }
 
     pub fn h_line(&mut self, start: Point, len: i16, double: bool, color: (Fg, Bg)) {
