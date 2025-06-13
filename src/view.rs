@@ -133,6 +133,10 @@ bitflags! {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[derive(Serialize, Deserialize)]
+pub enum Visibility { Visible, Hidden, Collapsed }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize)]
 pub enum ViewHAlign { Left, Center, Right, Stretch }
 
 impl From<ViewHAlign> for Option<HAlign> {
@@ -311,6 +315,9 @@ macro_rules! view_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub secondary_focus_keys: Option<$crate::view::SecondaryFocusKeys>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub visibility: Option<$crate::view::Visibility>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -346,6 +353,7 @@ macro_rules! view_apply_template {
             $this.allow_focus.map(|x| obj.set_allow_focus(x)); 
             $this.is_enabled.map(|x| obj.set_is_enabled(x));
             $this.secondary_focus_keys.map(|x| obj.set_secondary_focus_keys(x));
+            $this.visibility.map(|x| obj.set_visibility(x));
         }
     };
 }
@@ -405,6 +413,7 @@ struct ViewData {
     key_handler: EventHandler<Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>>,
     secondary_focus_keys: SecondaryFocusKeys,
     secondary_focus_root: rc::Weak<dyn IsView>,
+    visibility: Visibility,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -428,6 +437,12 @@ pub struct View {
     _set_visual_parent: fn(value: Option<&Rc<dyn IsView>>),
     #[non_virt]
     _secondary_focus_root: fn() -> Option<Rc<dyn IsView>>,
+    #[non_virt]
+    visibility: fn() -> Visibility,
+    #[non_virt]
+    set_visibility: fn(value: Visibility),
+    #[non_virt]
+    _is_visible_core: fn() -> bool,
     #[non_virt]
     width: fn() -> Option<i16>,
     #[non_virt]
@@ -577,6 +592,7 @@ impl View {
                 key_handler: Default::default(),
                 secondary_focus_keys: SecondaryFocusKeys::None,
                 secondary_focus_root: <rc::Weak::<View>>::new(),
+                visibility: Visibility::Visible,
             })
         }
     }
@@ -602,6 +618,25 @@ impl View {
         old._set_owner(None);
         value._set_owner(Some(this));
         parent.map(|x| x.invalidate_measure());
+    }
+
+    pub fn _is_visible_core_impl(this: &Rc<dyn IsView>) -> bool {
+        let mut view = this.clone();
+        loop {
+            let parent = {
+                let data = view.view().data.borrow();
+                if data.visibility != Visibility::Visible {
+                    return false;
+                }
+                data.visual_parent.upgrade()
+            };
+            if let Some(parent) = parent {
+                view = parent;
+            } else {
+                break;
+            }
+        }
+        true
     }
 
     pub fn is_enabled_core_impl(this: &Rc<dyn IsView>) -> bool {
@@ -684,6 +719,27 @@ impl View {
 
     pub fn _secondary_focus_root_impl(this: &Rc<dyn IsView>) -> Option<Rc<dyn IsView>> {
         this.view().data.borrow().secondary_focus_root.upgrade()
+    }
+
+    pub fn visibility_impl(this: &Rc<dyn IsView>) -> Visibility {
+        this.view().data.borrow().visibility
+    }
+
+    pub fn set_visibility_impl(this: &Rc<dyn IsView>, value: Visibility) {
+        let old_value = {
+            let mut data = this.view().data.borrow_mut();
+            if data.visibility == value { return; }
+            replace(&mut data.visibility, value)
+        };
+        match (old_value, value) {
+            (Visibility::Visible, Visibility::Collapsed) => this.invalidate_measure(),
+            (Visibility::Visible, Visibility::Hidden) => this.invalidate_render(),
+            (Visibility::Hidden, Visibility::Visible) => this.invalidate_render(),
+            (Visibility::Hidden, Visibility::Collapsed) => this.invalidate_measure(),
+            (Visibility::Collapsed, Visibility::Visible) => this.invalidate_measure(),
+            (Visibility::Collapsed, Visibility::Hidden) => this.invalidate_measure(),
+            _ => panic!(),
+        }
     }
 
     pub fn width_impl(this: &Rc<dyn IsView>) -> Option<i16> {
@@ -812,36 +868,42 @@ impl View {
     }
 
     pub fn measure_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) {
-        let (a_w, a_h, max_size, min_size) = {
-            let this = this.view().data.borrow();
-            let max_width = this.width.or(this.max_width);
-            let max_height = this.height.or(this.max_height);
-            let max_size = Vector { x: max_width.unwrap_or(-1), y: max_height.unwrap_or(-1) };
-            let min_size = Vector {
-                x: this.width.unwrap_or(this.min_size.x),
-                y: this.height.unwrap_or(this.min_size.y),
-            };
-            if Some((w, h)) == this.measure_size { return; }
-            let g_w = if this.h_align != ViewHAlign::Stretch { None } else { w };
-            let g_h = if this.v_align != ViewVAlign::Stretch { None } else { h };
-            let g_w = g_w.or(max_width);
-            let g_h = g_h.or(max_height);
-            let a = Vector { x: g_w.unwrap_or(0), y: g_h.unwrap_or(0) };
-            let a = this.margin.shrink_rect_size(a);
-            let a = a.min(max_size).max(min_size);
-            (g_w.map(|_| a.x), g_h.map(|_| a.y), max_size, min_size)
-        };
-        let desired_size = this.measure_override(a_w, a_h);
-        {
+        if this.visibility() == Visibility::Collapsed {
             let mut this = this.view().data.borrow_mut();
-            let desired_size = desired_size.min(max_size).max(min_size);
-            let desired_size = this.margin.expand_rect_size(desired_size);
-            let desired_size = Vector {
-                x: w.map_or(desired_size.x, |w| min(w as u16, desired_size.x as u16) as i16),
-                y: h.map_or(desired_size.y, |h| min(h as u16, desired_size.y as u16) as i16),
-            };
             this.measure_size = Some((w, h));
-            this.desired_size = desired_size;
+            this.desired_size = Vector::null();
+        } else {
+            let (a_w, a_h, max_size, min_size) = {
+                let this = this.view().data.borrow();
+                let max_width = this.width.or(this.max_width);
+                let max_height = this.height.or(this.max_height);
+                let max_size = Vector { x: max_width.unwrap_or(-1), y: max_height.unwrap_or(-1) };
+                let min_size = Vector {
+                    x: this.width.unwrap_or(this.min_size.x),
+                    y: this.height.unwrap_or(this.min_size.y),
+                };
+                if Some((w, h)) == this.measure_size { return; }
+                let g_w = if this.h_align != ViewHAlign::Stretch { None } else { w };
+                let g_h = if this.v_align != ViewVAlign::Stretch { None } else { h };
+                let g_w = g_w.or(max_width);
+                let g_h = g_h.or(max_height);
+                let a = Vector { x: g_w.unwrap_or(0), y: g_h.unwrap_or(0) };
+                let a = this.margin.shrink_rect_size(a);
+                let a = a.min(max_size).max(min_size);
+                (g_w.map(|_| a.x), g_h.map(|_| a.y), max_size, min_size)
+            };
+            let desired_size = this.measure_override(a_w, a_h);
+            {
+                let mut this = this.view().data.borrow_mut();
+                let desired_size = desired_size.min(max_size).max(min_size);
+                let desired_size = this.margin.expand_rect_size(desired_size);
+                let desired_size = Vector {
+                    x: w.map_or(desired_size.x, |w| min(w as u16, desired_size.x as u16) as i16),
+                    y: h.map_or(desired_size.y, |h| min(h as u16, desired_size.y as u16) as i16),
+                };
+                this.measure_size = Some((w, h));
+                this.desired_size = desired_size;
+            }
         }
     }
 
@@ -866,7 +928,9 @@ impl View {
     }
 
     pub fn arrange_impl(this: &Rc<dyn IsView>, bounds: Rect) {
-        let render_size = {
+        let render_size = if this.visibility() == Visibility::Collapsed {
+            Vector::null()
+        } else {
             let (a_size, max_size, min_size) = {
                 let data = this.view().data.borrow();
                 let max_width = data.width.or(data.max_width);
@@ -959,6 +1023,7 @@ impl View {
 
     fn invalidate_render_raw(this: &Rc<dyn IsView>, rect: Rect) {
         let rect = rect.intersect(this.inner_render_bounds());
+        if rect.is_empty() { return; }
         let offset = this.view().data.borrow().real_render_bounds.tl;
         let parent_rect = rect.absolute_with(offset);
         if let Some(parent) = this.visual_parent() {

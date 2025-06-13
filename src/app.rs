@@ -7,7 +7,7 @@ use timer_no_std::{MonoClock, MonoTime};
 use crate::arena::{Handle, Registry};
 use crate::base::{Vector, Point, Screen, Event, Key, option_addr_eq};
 use crate::render_port::RenderPort;
-use crate::view::{View, ViewExt, SecondaryFocusKeys};
+use crate::view::{View, ViewExt, SecondaryFocusKeys, Visibility};
 
 import! { pub app:
     use [obj basic_oop::obj];
@@ -132,6 +132,7 @@ impl App {
         if rp.invalidated_rect.intersect(rp.bounds).is_empty() {
             return;
         }
+        if view.visibility() != Visibility::Visible { return; }
         view.render(rp);
         let base_offset = rp.offset;
         let base_bounds = rp.bounds;
@@ -292,15 +293,16 @@ impl App {
             let root = data.root.as_ref().expect("app is not running");
             root._secondary_focus_root()
         };
-        let focused = if let Some(focused) = this.focused(primary_focus) {
+        let focused = if let Some(focused) = this.focused(primary_focus) && focused._is_visible_core() {
             focused
         } else {
-            let mut root = this.app().data.borrow().root.clone().unwrap();
-            if !primary_focus {
+            let root = if primary_focus {
+                this.app().data.borrow().root.clone().unwrap()
+            } else {
                 let Some(sfr) = sfr.clone() else { return; };
-                root = sfr;
-            }
-            if !root.is_enabled() { return; }
+                sfr
+            };
+            if !root.is_enabled() || !root._is_visible_core() { return; }
             if root.allow_focus() {
                 this.focus(Some(&root), primary_focus);
                 return;
@@ -321,6 +323,7 @@ impl App {
             if 
                    focus_visual_children_count != 0
                 && (!primary_focus || !option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr)))
+                && focus.visibility() == Visibility::Visible
             {
                 focus = focus.visual_child(if forward { 0 } else { focus_visual_children_count - 1 });
             } else {
@@ -349,6 +352,7 @@ impl App {
             if primary_focus && option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr)) {
                 continue;
             }
+            if focus.visibility() != Visibility::Visible { continue; }
             if focus.allow_focus() && focus.is_enabled() {
                 this.focus(Some(&focus), primary_focus);
                 return;
