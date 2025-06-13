@@ -5,6 +5,7 @@ use crate::base::TextWrapping;
 use crate::border::{IsBorder, BorderExt, BorderTemplate};
 use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
 use crate::adorners_panel::AdornersPanelTemplate;
+use crate::padding::{IsPadding, PaddingExt, PaddingTemplate};
 use crate::template::{Template, NameResolver};
 
 import! { pub group_box:
@@ -106,6 +107,10 @@ impl GroupBox {
             = dyn_cast_rc(
                 template.find("PART_HeaderPresenter").expect("PART_HeaderPresenter").clone()
             ).expect("PART_HeaderPresenter: ContentPresenter");
+        let part_padding: Rc<dyn IsPadding>
+            = dyn_cast_rc(
+                template.find("PART_Padding").expect("PART_Padding").clone()
+            ).expect("PART_Padding: Padding");
         let (header_align, double, color) = {
             let data = this.group_box().data.borrow();
             (data.header_align, data.double, data.color)
@@ -114,6 +119,7 @@ impl GroupBox {
         part_border.set_double(double);
         part_header_presenter.set_h_align(header_align);
         part_header_presenter.set_text_color(color);
+        part_padding.set_color(color);
     }
 
     pub fn template_impl(_this: &Rc<dyn IsControl>) -> Box<dyn Template> {
@@ -128,11 +134,15 @@ impl GroupBox {
                     })),
                     .. Default::default()
                 }),
-                Box::new(ContentPresenterTemplate {
-                    name: "PART_HeaderPresenter".to_string(),
-                    show_text_trimming_marker: Some(true),
+                Box::new(PaddingTemplate {
+                    name: "PART_Padding".to_string(),
                     margin: Some(Thickness::new(1, 0, 1, 0)),
-                    v_align: Some(ViewVAlign::Top),
+                    child: Some(Box::new(ContentPresenterTemplate {
+                        name: "PART_HeaderPresenter".to_string(),
+                        margin: Some(Thickness::new(1, 0, 1, 0)),
+                        v_align: Some(ViewVAlign::Top),
+                        .. Default::default()
+                    })),
                     .. Default::default()
                 }),
             ],

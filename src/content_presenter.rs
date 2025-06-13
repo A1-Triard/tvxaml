@@ -4,15 +4,12 @@ use either::{Either, Left, Right};
 use std::cell::RefCell;
 use std::ptr::addr_eq;
 use crate::base::{option_addr_eq, TextWrapping};
-use crate::background::{IsBackground, BackgroundExt, BackgroundTemplate};
-use crate::dock_panel::{Dock, DockLayoutTemplate, DockPanelTemplate};
-use crate::static_text::{IsStaticText, StaticTextExt, StaticTextTemplate, TextTrimmingMarkerTemplate};
-use crate::template::{NameResolver, Names};
+use crate::static_text::{IsStaticText, StaticTextExt, StaticText};
+use crate::template::{NameResolver, Template};
 
 import! { pub content_presenter:
     use [view crate::view];
     use crate::base::{Fg, Bg};
-    use crate::template::Template;
 }
 
 struct ContentPresenterData {
@@ -20,8 +17,7 @@ struct ContentPresenterData {
     text: Rc<String>,
     text_color: (Fg, Bg),
     text_wrapping: TextWrapping,
-    show_text_trimming_marker: bool,
-    actual_content: Option<Either<(Rc<dyn IsView>, Names), Rc<dyn IsView>>>,
+    actual_content: Option<Either<Rc<dyn IsStaticText>, Rc<dyn IsView>>>,
 }
 
 #[class_unsafe(inherits_View)]
@@ -40,10 +36,6 @@ pub struct ContentPresenter {
     #[non_virt]
     set_text_wrapping: fn(value: TextWrapping),
     #[non_virt]
-    show_text_trimming_marker: fn() -> bool,
-    #[non_virt]
-    set_show_text_trimming_marker: fn(value: bool),
-    #[non_virt]
     text_color: fn() -> (Fg, Bg),
     #[non_virt]
     set_text_color: fn(value: (Fg, Bg)),
@@ -55,12 +47,6 @@ pub struct ContentPresenter {
     measure_override: (),
     #[over]
     arrange_override: (),
-    #[virt]
-    text_template: fn() -> Box<dyn Template>,
-    #[non_virt]
-    update: fn(),
-    #[virt]
-    update_override: fn(text_template: &Names),
 }
 
 impl ContentPresenter {
@@ -79,81 +65,9 @@ impl ContentPresenter {
                 text: Rc::new(String::new()),
                 text_color: (Fg::LightGray, Bg::None),
                 text_wrapping: TextWrapping::NoWrap,
-                show_text_trimming_marker: false,
                 actual_content: None,
             }),
         }
-    }
-
-    pub fn text_template_impl(_this: &Rc<dyn IsContentPresenter>) -> Box<dyn Template> {
-        Box::new(DockPanelTemplate {
-            children: vec![
-                Box::new(BackgroundTemplate {
-                    name: "PART_Padding".to_string(),
-                    pattern: Some(" ".to_string()),
-                    width: Some(Some(1)),
-                    height: Some(Some(1)),
-                    layout: Some(Box::new(DockLayoutTemplate {
-                        dock: Some(Dock::Left),
-                        .. Default::default()
-                    })),
-                    .. Default::default()
-                }),
-                Box::new(TextTrimmingMarkerTemplate {
-                    name: "PART_Trimming".to_string(),
-                    text: "PART_Text".to_string(),
-                    layout: Some(Box::new(DockLayoutTemplate {
-                        dock: Some(Dock::Right),
-                        .. Default::default()
-                    })),
-                    .. Default::default()
-                }),
-                Box::new(StaticTextTemplate {
-                    name: "PART_Text".to_string(),
-                    .. Default::default()
-                }),
-            ],
-            .. Default::default()
-        })
-    }
-
-    pub fn update_impl(this: &Rc<dyn IsContentPresenter>) {
-        let text_template = {
-            let data = this.content_presenter().data.borrow();
-            data.actual_content.as_ref().and_then(|x| x.as_ref().left()).map(|x| x.1.clone())
-        };
-        if let Some(text_template) = text_template {
-            this.update_override(&text_template);
-        }
-    }
-
-    pub fn update_override_impl(this: &Rc<dyn IsContentPresenter>, text_template: &Names) {
-        let part_text: Rc<dyn IsStaticText>
-            = dyn_cast_rc(
-                text_template.find("PART_Text").expect("PART_Text").clone()
-            ).expect("PART_Text: StaticText");
-        let part_padding: Rc<dyn IsBackground>
-            = dyn_cast_rc(
-                text_template.find("PART_Padding").expect("PART_Padding").clone()
-            ).expect("PART_Padding: Background");
-        let part_trimming: Rc<dyn IsView>
-            = dyn_cast_rc(
-                text_template.find("PART_Trimming").expect("PART_Trimming").clone()
-            ).expect("PART_Trimming: View");
-        let (text, text_color, text_wrapping, show_trimming_marker) = {
-            let data = this.content_presenter().data.borrow();
-            (data.text.clone(), data.text_color, data.text_wrapping, data.show_text_trimming_marker)
-        };
-        part_text.set_text(text);
-        part_text.set_color(text_color);
-        part_text.set_text_wrapping(text_wrapping);
-        part_padding.set_color(text_color);
-        part_padding.set_visibility(
-            if show_trimming_marker { Visibility:: Visible } else { Visibility::Collapsed }
-        );
-        part_trimming.set_visibility(
-            if show_trimming_marker { Visibility:: Visible } else { Visibility::Collapsed }
-        );
     }
 
     pub fn content_impl(this: &Rc<dyn IsContentPresenter>) -> Option<Rc<dyn IsView>> {
@@ -171,7 +85,11 @@ impl ContentPresenter {
                 } else if data.text.is_empty() {
                     Some(None)
                 } else {
-                    Some(Some(Left(())))
+                    let text = StaticText::new();
+                    text.set_text(data.text.clone());
+                    text.set_color(data.text_color);
+                    text.set_text_wrapping(data.text_wrapping);
+                    Some(Some(Left(text)))
                 }
             } else {
                 if let Some(value) = value {
@@ -182,19 +100,7 @@ impl ContentPresenter {
             }
         };
         if let Some(new_actual_content) = new_actual_content {
-            if let Some(new_actual_content) = new_actual_content {
-                match new_actual_content {
-                    Left(()) => {
-                        let (text, names) = this.text_template().load_root();
-                        let text: Rc<dyn IsView> = dyn_cast_rc(text).expect("View");
-                        Self::set_actual_content(this, Some(Left((text, names.clone()))));
-                        this.update_override(&names);
-                    },
-                    Right(x) => Self::set_actual_content(this, Some(Right(x))),
-                }
-            } else {
-                Self::set_actual_content(this, None);
-            }
+            Self::set_actual_content(this, new_actual_content);
         }
     }
 
@@ -219,25 +125,24 @@ impl ContentPresenter {
                 } else if data.actual_content.is_some() {
                     None
                 } else {
-                    Some(Some(Left(())))
+                    let text = StaticText::new();
+                    text.set_text(data.text.clone());
+                    text.set_color(data.text_color);
+                    text.set_text_wrapping(data.text_wrapping);
+                    Some(Some(Left(text)))
                 }
             }
         };
         if let Some(new_actual_content) = new_actual_content {
             if let Some(new_actual_content) = new_actual_content {
                 match new_actual_content {
-                    Left(()) => {
-                        let (text, names) = this.text_template().load_root();
-                        let text: Rc<dyn IsView> = dyn_cast_rc(text).expect("View");
-                        Self::set_actual_content(this, Some(Left((text, names.clone()))));
-                        this.update_override(&names);
-                    },
+                    Left(text) => Self::set_actual_content(this, Some(Left(text))),
                     Right(()) => {
-                        let names = {
+                        let text = {
                             let data = this.content_presenter().data.borrow();
-                            data.actual_content.as_ref().unwrap().as_ref().left().unwrap().1.clone()
+                            data.actual_content.as_ref().unwrap().as_ref().left().unwrap().clone()
                         };
-                        this.update_override(&names);
+                        text.set_text(value);
                     },
                 }
             } else {
@@ -248,18 +153,20 @@ impl ContentPresenter {
 
     fn set_actual_content(
         this: &Rc<dyn IsContentPresenter>,
-        value: Option<Either<(Rc<dyn IsView>, Names), Rc<dyn IsView>>>,
+        value: Option<Either<Rc<dyn IsStaticText>, Rc<dyn IsView>>>,
     ) {
         let content = {
             let data = this.content_presenter().data.borrow();
-            data.actual_content.as_ref().map(|x| x.as_ref().either(|x| x.0.clone(), |x| x.clone()))
+            data.actual_content.as_ref()
+                .map(|x| x.as_ref().either(|x| { let y: Rc<dyn IsView> = x.clone(); y }, |x| x.clone()))
         };
         if let Some(content) = content {
             this.remove_visual_child(&content);
             content._set_visual_parent(None);
             content._set_layout_parent(None);
         }
-        let content = value.as_ref().map(|x| x.as_ref().either(|x| x.0.clone(), |x| x.clone()));
+        let content = value.as_ref()
+            .map(|x| x.as_ref().either(|x| { let y: Rc<dyn IsView> = x.clone(); y }, |x| x.clone()));
         this.content_presenter().data.borrow_mut().actual_content = value;
         let this: Rc<dyn IsView> = this.clone();
         if let Some(content) = content {
@@ -280,7 +187,11 @@ impl ContentPresenter {
             if data.text_color == value { return; }
             data.text_color = value;
         };
-        this.update();
+        let content = {
+            let data = this.content_presenter().data.borrow();
+            data.actual_content.as_ref().and_then(|x| x.as_ref().left().map(|x| x.clone()))
+        };
+        content.map(|x| x.set_color(value));
     }
 
     pub fn text_wrapping_impl(this: &Rc<dyn IsContentPresenter>) -> TextWrapping {
@@ -293,20 +204,11 @@ impl ContentPresenter {
             if data.text_wrapping == value { return; }
             data.text_wrapping = value;
         };
-        this.update();
-    }
-
-    pub fn show_text_trimming_marker_impl(this: &Rc<dyn IsContentPresenter>) -> bool {
-        this.content_presenter().data.borrow().show_text_trimming_marker
-    }
-
-    pub fn set_show_text_trimming_marker_impl(this: &Rc<dyn IsContentPresenter>, value: bool) {
-        {
-            let mut data = this.content_presenter().data.borrow_mut();
-            if data.show_text_trimming_marker == value { return; }
-            data.show_text_trimming_marker = value;
+        let content = {
+            let data = this.content_presenter().data.borrow();
+            data.actual_content.as_ref().and_then(|x| x.as_ref().left().map(|x| x.clone()))
         };
-        this.update();
+        content.map(|x| x.set_text_wrapping(value));
     }
 
     pub fn visual_children_count_impl(this: &Rc<dyn IsView>) -> usize {
@@ -322,14 +224,14 @@ impl ContentPresenter {
         let this: Rc<dyn IsContentPresenter> = dyn_cast_rc(this.clone()).unwrap();
         assert_eq!(index, 0);
         this.content_presenter().data.borrow().actual_content
-            .as_ref().unwrap().as_ref().either(|x| x.0.clone(), |x| x.clone())
+            .as_ref().unwrap().as_ref().either(|x| { let y: Rc<dyn IsView> = x.clone(); y }, |x| x.clone())
     }
 
     pub fn measure_override_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) -> Vector {
         let this: Rc<dyn IsContentPresenter> = dyn_cast_rc(this.clone()).unwrap();
         let content
             = this.content_presenter().data.borrow().actual_content
-            .as_ref().map(|x| x.as_ref().either(|x| x.0.clone(), |x| x.clone()));
+            .as_ref().map(|x| x.as_ref().either(|x| { let y: Rc<dyn IsView> = x.clone(); y }, |x| x.clone()));
         if let Some(content) = content {
             content.measure(w, h);
             content.desired_size()
@@ -342,7 +244,7 @@ impl ContentPresenter {
         let this: Rc<dyn IsContentPresenter> = dyn_cast_rc(this.clone()).unwrap();
         let content
             = this.content_presenter().data.borrow().actual_content
-            .as_ref().map(|x| x.as_ref().either(|x| x.0.clone(), |x| x.clone()));
+            .as_ref().map(|x| x.as_ref().either(|x| { let y: Rc<dyn IsView> = x.clone(); y }, |x| x.clone()));
         if let Some(content) = content {
             content.arrange(bounds);
             content.render_bounds().size
@@ -382,9 +284,6 @@ macro_rules! content_presenter_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub text_wrapping: Option<$crate::base::TextWrapping>,
-                #[serde(default)]
-                #[serde(skip_serializing_if="Option::is_none")]
-                pub show_text_trimming_marker: Option<bool>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -409,7 +308,6 @@ macro_rules! content_presenter_apply_template {
             $this.text.as_ref().map(|x| obj.set_text($crate::alloc_rc_Rc::new(x.clone())));
             $this.text_color.map(|x| obj.set_text_color(x));
             $this.text_wrapping.map(|x| obj.set_text_wrapping(x));
-            $this.show_text_trimming_marker.map(|x| obj.set_show_text_trimming_marker(x));
         }
     };
 }

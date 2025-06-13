@@ -251,6 +251,7 @@ impl CheckBox {
     }
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
+        let bounds = this.inner_render_bounds();
         let is_enabled = this.is_enabled();
         let is_focused = this.is_focused(None);
         let is_focused_primary = this.is_focused(Some(true));
@@ -271,6 +272,9 @@ impl CheckBox {
         if !data.text.is_empty() {
             rp.text(Point { x: 3, y: 0 }, color, " ");
             rp.label(Point { x: 4, y: 0 }, color, color_hotkey, &data.text);
+            if (label_width(&data.text) as u16) > (bounds.w() as u16).saturating_sub(4) {
+                rp.text(bounds.br_inner(), color, "►");
+            }
         }
         if is_focused_primary { rp.cursor(Point { x: 1, y: 0 }); }
     }

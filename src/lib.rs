@@ -39,3 +39,4 @@ pub mod headered_content_control;
 pub mod border;
 pub mod pile_panel;
 pub mod adorners_panel;
+pub mod padding;
