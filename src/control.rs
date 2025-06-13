@@ -3,11 +3,11 @@ use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use crate::base::{Fg, Bg};
 use crate::static_text::StaticTextTemplate;
-use crate::template::{NameResolver, Names};
+use crate::template::NameResolver;
 
 import! { pub control:
     use [view crate::view];
-    use crate::template::Template;
+    use crate::template::{Template, Names};
 }
 
 struct ControlData {
@@ -82,7 +82,6 @@ impl Control {
     pub fn update_override_impl(_this: &Rc<dyn IsControl>, _template: &Names) { }
 
     pub fn _attach_to_app_impl(this: &Rc<dyn IsView>, value: &Rc<dyn IsApp>) {
-        View::_attach_to_app_impl(this, value);
         let child = {
             let this: Rc<dyn IsControl> = dyn_cast_rc(this.clone()).unwrap();
             let (child, names) = {
@@ -95,6 +94,7 @@ impl Control {
             this.update_override(&names);
             child
         };
+        View::_attach_to_app_impl(this, value);
         child._set_layout_parent(Some(&this));
         child._set_visual_parent(Some(&this));
         this.add_visual_child(&child);
@@ -119,6 +119,7 @@ impl Control {
     pub fn visual_child_impl(this: &Rc<dyn IsView>, index: usize) -> Rc<dyn IsView> {
         let this: Rc<dyn IsControl> = dyn_cast_rc(this.clone()).unwrap();
         assert_eq!(index, 0);
+        debug_assert!(this.app().is_some());
         this.control().data.borrow().child.as_ref().unwrap().0.clone()
     }
 

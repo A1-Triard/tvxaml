@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use std::ptr::addr_eq;
-use crate::base::option_addr_eq;
+use crate::base::{option_addr_eq, TextWrapping};
 use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
 use crate::dock_panel::{DockLayoutTemplate, DockPanelTemplate, Dock};
 use crate::template::{Template, NameResolver, Names};
@@ -90,6 +90,7 @@ impl HeaderedContentControl {
                 }),
                 Box::new(ContentPresenterTemplate {
                     name: "PART_ContentPresenter".to_string(),
+                    text_wrapping: Some(TextWrapping::Wrap),
                     .. Default::default()
                 }),
             ],

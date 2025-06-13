@@ -1,18 +1,23 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use crate::base::TextWrapping;
+use crate::border::{IsBorder, BorderExt, BorderTemplate};
+use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
+use crate::pile_panel::PilePanelTemplate;
 use crate::template::{Template, NameResolver};
 
 import! { pub group_box:
-    use [headered_decorator crate::headered_decorator];
+    use [headered_content_control crate::headered_content_control];
 }
 
 struct GroupBoxData {
     double: bool,
     color: (Fg, Bg),
+    header_align: ViewHAlign,
 }
 
-#[class_unsafe(inherits_HeaderedDecorator)]
+#[class_unsafe(inherits_HeaderedContentControl)]
 pub struct GroupBox {
     data: RefCell<GroupBoxData>,
     #[non_virt]
@@ -23,14 +28,14 @@ pub struct GroupBox {
     color: fn() -> (Fg, Bg),
     #[non_virt]
     set_color: fn(value: (Fg, Bg)),
+    #[non_virt]
+    header_align: fn() -> ViewHAlign,
+    #[non_virt]
+    set_header_align: fn(value: ViewHAlign),
     #[over]
-    measure_override: (),
+    update_override: (),
     #[over]
-    arrange_override: (),
-    #[over]
-    render: (),
-    #[over]
-    _init: (),
+    template: (),
 }
 
 impl GroupBox {
@@ -42,18 +47,13 @@ impl GroupBox {
 
     pub unsafe fn new_raw(vtable: Vtable) -> Self {
         GroupBox {
-            headered_decorator: unsafe { HeaderedDecorator::new_raw(vtable) },
+            headered_content_control: unsafe { HeaderedContentControl::new_raw(vtable) },
             data: RefCell::new(GroupBoxData {
                 double: false,
                 color: (Fg::LightGray, Bg::None),
+                header_align: ViewHAlign::Left,
             }),
         }
-    }
-
-    pub fn _init_impl(this: &Rc<dyn IsView>) {
-        HeaderedDecorator::_init_impl(this);
-        let this: Rc<dyn IsGroupBox> = dyn_cast_rc(this.clone()).unwrap();
-        this._set_header_text_color(this.color());
     }
 
     pub fn double_impl(this: &Rc<dyn IsGroupBox>) -> bool {
@@ -66,7 +66,7 @@ impl GroupBox {
             if data.double == value { return; }
             data.double = value;
         }
-        this.invalidate_render();
+        this.update();
     }
 
     pub fn color_impl(this: &Rc<dyn IsGroupBox>) -> (Fg, Bg) {
@@ -79,60 +79,64 @@ impl GroupBox {
             if data.color == value { return; }
             data.color = value;
         }
-        this._set_header_text_color(value);
-        this.invalidate_render();
+        this.update();
     }
 
-    pub fn measure_override_impl(this: &Rc<dyn IsView>, w: Option<i16>, h: Option<i16>) -> Vector {
-        let this: Rc<dyn IsHeaderedDecorator> = dyn_cast_rc(this.clone()).unwrap();
-        let w = w.map(|x| x.saturating_sub(2));
-        let h = h.map(|x| x.saturating_sub(2));
-        let size = if let Some(child) = this.child() {
-            child.measure(w, h);
-            child.desired_size()
-        } else {
-            Vector::null()
-        };
-        if let Some(header) = this.actual_header() {
-            header.measure(Some(size.x.saturating_sub(2)), Some(1));
-        }
-        Thickness::all(1).expand_rect_size(size)
+    pub fn header_align_impl(this: &Rc<dyn IsGroupBox>) -> ViewHAlign {
+        this.group_box().data.borrow().header_align
     }
 
-    pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
-        let this: Rc<dyn IsHeaderedDecorator> = dyn_cast_rc(this.clone()).unwrap();
-        if let Some(header) = this.actual_header() {
-            let header_bounds = Thickness::new(2, 0, 2, 0).shrink_rect(bounds.t_line());
-            header.arrange(header_bounds);
-        }
-        if let Some(child) = this.child() {
-            let child_bounds = Thickness::all(1).shrink_rect(bounds);
-            child.arrange(child_bounds);
-        }
-        bounds.size
-    }
-
-    pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
-        let this: Rc<dyn IsGroupBox> = dyn_cast_rc(this.clone()).unwrap();
-        let bounds = this.inner_render_bounds();
+    pub fn set_header_align_impl(this: &Rc<dyn IsGroupBox>, value: ViewHAlign) {
         {
-            let data = this.group_box().data.borrow();
-            rp.fill_bg(data.color);
-            rp.h_line(bounds.tl, bounds.w(), data.double, data.color);
-            rp.h_line(bounds.bl_inner(), bounds.w(), data.double, data.color);
-            rp.v_line(bounds.tl, bounds.h(), data.double, data.color);
-            rp.v_line(bounds.tr_inner(), bounds.h(), data.double, data.color);
-            rp.tl_edge(bounds.tl, data.double, data.color);
-            rp.tr_edge(bounds.tr_inner(), data.double, data.color);
-            rp.br_edge(bounds.br_inner(), data.double, data.color);
-            rp.bl_edge(bounds.bl_inner(), data.double, data.color);
+            let mut data = this.group_box().data.borrow_mut();
+            if data.header_align == value { return; }
+            data.header_align = value;
         }
-        if let Some(header) = this.actual_header() {
-            let header_bounds = header.render_bounds();
+        this.update();
+    }
+
+    pub fn update_override_impl(this: &Rc<dyn IsControl>, template: &Names) {
+        HeaderedContentControl::update_override_impl(this, template);
+        let this: Rc<dyn IsGroupBox> = dyn_cast_rc(this.clone()).unwrap();
+        let part_border: Rc<dyn IsBorder>
+            = dyn_cast_rc(
+                template.find("PART_Border").expect("PART_Border").clone()
+            ).expect("PART_Border: Border");
+        let part_header_presenter: Rc<dyn IsContentPresenter>
+            = dyn_cast_rc(
+                template.find("PART_HeaderPresenter").expect("PART_HeaderPresenter").clone()
+            ).expect("PART_HeaderPresenter: ContentPresenter");
+        let (header_align, double, color) = {
             let data = this.group_box().data.borrow();
-            rp.text(header_bounds.tl.offset(Vector { x: -1, y: 0 }), data.color, " ");
-            rp.text(header_bounds.tr(), data.color, " ");
-        }
+            (data.header_align, data.double, data.color)
+        };
+        part_border.set_color(color);
+        part_border.set_double(double);
+        part_header_presenter.set_h_align(header_align);
+        part_header_presenter.set_text_color(color);
+    }
+
+    pub fn template_impl(_this: &Rc<dyn IsControl>) -> Box<dyn Template> {
+        Box::new(PilePanelTemplate {
+            children: vec![
+                Box::new(BorderTemplate {
+                    name: "PART_Border".to_string(),
+                    child: Some(Box::new(ContentPresenterTemplate {
+                        name: "PART_ContentPresenter".to_string(),
+                        text_wrapping: Some(TextWrapping::Wrap),
+                        .. Default::default()
+                    })),
+                    .. Default::default()
+                }),
+                Box::new(ContentPresenterTemplate {
+                    name: "PART_HeaderPresenter".to_string(),
+                    show_text_trimming_marker: Some(true),
+                    margin: Some(Thickness::new(1, 0, 1, 0)),
+                    .. Default::default()
+                }),
+            ],
+            .. Default::default()
+        })
     }
 }
 
@@ -149,7 +153,7 @@ macro_rules! group_box_template {
             ),+ $(,)?)?
         }
     ) => {
-        $crate::headered_decorator_template! {
+        $crate::headered_content_control_template! {
             $(#[$attr])*
             $vis struct $name in $mod {
                 $(use $path as $import;)*
@@ -160,6 +164,9 @@ macro_rules! group_box_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub header_align: Option<$crate::view::ViewHAlign>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -172,7 +179,7 @@ macro_rules! group_box_template {
 #[macro_export]
 macro_rules! group_box_apply_template {
     ($this:ident, $instance:ident, $names:ident) => {
-        $crate::headered_decorator_apply_template!($this, $instance, $names);
+        $crate::headered_content_control_apply_template!($this, $instance, $names);
         {
             use $crate::group_box::GroupBoxExt;
 
@@ -180,13 +187,14 @@ macro_rules! group_box_apply_template {
                 = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
             $this.double.map(|x| obj.set_double(x));
             $this.color.map(|x| obj.set_color(x));
+            $this.header_align.map(|x| obj.set_header_align(x));
         }
     };
 }
 
 group_box_template! {
     #[derive(serde::Serialize, serde::Deserialize, Default)]
-    #[serde(rename="GroupBox@Child")]
+    #[serde(rename="GroupBox@Content")]
     pub struct GroupBoxTemplate in template { }
 }
 

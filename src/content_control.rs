@@ -2,7 +2,7 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use std::ptr::addr_eq;
-use crate::base::option_addr_eq;
+use crate::base::{option_addr_eq, TextWrapping};
 use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
 use crate::template::{NameResolver, Names};
 
@@ -67,9 +67,9 @@ impl ContentControl {
             let data = this.content_control().data.borrow();
             (data.content.clone(), data.text.clone(), data.text_color)
         };
-        part_content_presenter.set_content(content);
         part_content_presenter.set_text(text);
         part_content_presenter.set_text_color(text_color);
+        part_content_presenter.set_content(content);
     }
 
     pub fn content_impl(this: &Rc<dyn IsContentControl>) -> Option<Rc<dyn IsView>> {
@@ -116,6 +116,7 @@ impl ContentControl {
     pub fn template_impl(_this: &Rc<dyn IsControl>) -> Box<dyn Template> {
         Box::new(ContentPresenterTemplate {
             name: "PART_ContentPresenter".to_string(),
+            text_wrapping: Some(TextWrapping::Wrap),
             .. Default::default()
         })
     }
@@ -134,7 +135,7 @@ macro_rules! content_control_template {
             ),+ $(,)?)?
         }
     ) => {
-        $crate::decorator_template! {
+        $crate::control_template! {
             $(#[$attr])*
             $vis struct $name in $mod {
                 $(use $path as $import;)*
@@ -160,7 +161,7 @@ macro_rules! content_control_template {
 #[macro_export]
 macro_rules! content_control_apply_template {
     ($this:ident, $instance:ident, $names:ident) => {
-        $crate::decorator_apply_template!($this, $instance, $names);
+        $crate::control_apply_template!($this, $instance, $names);
         {
             use $crate::content_control::ContentControlExt;
 

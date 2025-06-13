@@ -187,7 +187,8 @@ impl ContentPresenter {
                     Left(()) => {
                         let (text, names) = this.text_template().load_root();
                         let text: Rc<dyn IsView> = dyn_cast_rc(text).expect("View");
-                        Self::set_actual_content(this, Some(Left((text, names))));
+                        Self::set_actual_content(this, Some(Left((text, names.clone()))));
+                        this.update_override(&names);
                     },
                     Right(x) => Self::set_actual_content(this, Some(Right(x))),
                 }
@@ -228,7 +229,8 @@ impl ContentPresenter {
                     Left(()) => {
                         let (text, names) = this.text_template().load_root();
                         let text: Rc<dyn IsView> = dyn_cast_rc(text).expect("View");
-                        Self::set_actual_content(this, Some(Left((text, names))));
+                        Self::set_actual_content(this, Some(Left((text, names.clone()))));
+                        this.update_override(&names);
                     },
                     Right(()) => {
                         let names = {
@@ -363,7 +365,7 @@ macro_rules! content_presenter_template {
             ),+ $(,)?)?
         }
     ) => {
-        $crate::decorator_template! {
+        $crate::view_template! {
             $(#[$attr])*
             $vis struct $name in $mod {
                 $(use $path as $import;)*
@@ -395,7 +397,7 @@ macro_rules! content_presenter_template {
 #[macro_export]
 macro_rules! content_presenter_apply_template {
     ($this:ident, $instance:ident, $names:ident) => {
-        $crate::decorator_apply_template!($this, $instance, $names);
+        $crate::view_apply_template!($this, $instance, $names);
         {
             use $crate::content_presenter::ContentPresenterExt;
 
