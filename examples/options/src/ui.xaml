@@ -6,9 +6,9 @@
         <CheckBox Text="Option ~2~" IsChecked="True" />
         <GroupBox>
           <GroupBox.Header>
-            <CheckBox Text="Radio Buttons" />
+            <CheckBox Text="Radio Buttons" IsChecked="True" Name="rbcb" />
           </GroupBox.Header>
-          <StackPanel Margin="1,0,1,0">
+          <StackPanel Margin="1,0,1,0" Name="rb">
             <RadioButton Text="~R~adio Button 1" IsChecked="True" Group="A" />
             <RadioButton Text="R~a~dio Button 2" Group="A" />
           </StackPanel>

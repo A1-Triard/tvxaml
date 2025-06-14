@@ -2,10 +2,11 @@
 
 use dynamic_cast::dyn_cast_rc;
 use std::process::ExitCode;
-use std::rc::Rc;
+use std::rc::{self, Rc};
 use timer_no_std::MonoClock;
 use tvxaml::base::Key;
 use tvxaml::app::{App, AppExt};
+use tvxaml::check_box::{IsCheckBox, CheckBoxExt};
 use tvxaml::template::Template;
 use tvxaml::view::{IsView, ViewExt};
 use tvxaml::xaml::{self};
@@ -29,7 +30,7 @@ fn start() -> Result<u8, tvxaml::base::Error> {
     let screen = unsafe { tvxaml_screen_ncurses::init(None, None) }?;
     let xaml = include_str!("ui.xaml");
     let ui: Box<dyn Template> = xaml::from_str(xaml).unwrap();
-    let (root, _) = ui.load_root();
+    let (root, names) = ui.load_root();
     let app = App::new(screen);
     let root: Rc<dyn IsView> = dyn_cast_rc(root).unwrap();
     {
@@ -42,5 +43,13 @@ fn start() -> Result<u8, tvxaml::base::Error> {
             false
         })));
     }
+    let rbcb: Rc<dyn IsCheckBox> = dyn_cast_rc(names.find("rbcb").unwrap().clone()).unwrap();
+    let rb: rc::Weak<dyn IsView> = Rc::downgrade(&dyn_cast_rc(names.find("rb").unwrap().clone()).unwrap());
+    let rbcb_ref = Rc::downgrade(&rbcb);
+    rbcb.handle_toggle(Some(Box::new(move || {
+        let rb = rb.upgrade().unwrap();
+        let rbcb = rbcb_ref.upgrade().unwrap();
+        rb.set_is_enabled(rbcb.is_checked());
+    })));
     app.run(&mut clock, &root, Some(&mut || { app.focus_next(true); app.focus_next(false); }))
 }
