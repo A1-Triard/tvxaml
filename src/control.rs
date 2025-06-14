@@ -12,7 +12,6 @@ import! { pub control:
 
 struct ControlData {
     child: Option<(Rc<dyn IsView>, Names)>,
-    template: Option<Box<dyn Template>>,
 }
 
 #[class_unsafe(inherits_View)]
@@ -28,8 +27,6 @@ pub struct Control {
     arrange_override: (),
     #[virt]
     template: fn() -> Box<dyn Template>,
-    #[over]
-    _init: (),
     #[non_virt]
     update: fn(),
     #[virt]
@@ -52,16 +49,8 @@ impl Control {
             view: unsafe { View::new_raw(vtable) },
             data: RefCell::new(ControlData {
                 child: None,
-                template: None,
             }),
         }
-    }
-
-    pub fn _init_impl(this: &Rc<dyn IsView>) {
-        View::_init_impl(this);
-        let this: Rc<dyn IsControl> = dyn_cast_rc(this.clone()).unwrap();
-        let template = this.template();
-        this.control().data.borrow_mut().template = Some(template);
     }
 
     pub fn template_impl(_this: &Rc<dyn IsControl>) -> Box<dyn Template> {
@@ -85,9 +74,9 @@ impl Control {
         let child = {
             let this: Rc<dyn IsControl> = dyn_cast_rc(this.clone()).unwrap();
             let (child, names) = {
-                let mut data = this.control().data.borrow_mut();
-                let (child, names) = data.template.as_ref().unwrap().load_root();
+                let (child, names) = this.template().load_root();
                 let child: Rc<dyn IsView> = dyn_cast_rc(child).expect("View");
+                let mut data = this.control().data.borrow_mut();
                 data.child = Some((child.clone(), names.clone()));
                 (child, names)
             };
