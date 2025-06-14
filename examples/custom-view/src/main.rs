@@ -60,5 +60,5 @@ fn start() -> Result<u8, tvxaml::base::Error> {
             }
         })));
     }
-    app.run(&mut clock, &root, Some(&mut || app.focus(Some(&root), true)))
+    app.run(&mut clock, &root, Some(&mut || app.focus(Some(&root), Some(true))))
 }
