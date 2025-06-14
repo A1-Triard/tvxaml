@@ -318,6 +318,9 @@ macro_rules! view_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub visibility: Option<$crate::view::Visibility>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub tab_index: Option<i8>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -354,6 +357,7 @@ macro_rules! view_apply_template {
             $this.is_enabled.map(|x| obj.set_is_enabled(x));
             $this.secondary_focus_keys.map(|x| obj.set_secondary_focus_keys(x));
             $this.visibility.map(|x| obj.set_visibility(x));
+            $this.tab_index.map(|x| obj.set_tab_index(x));
         }
     };
 }
@@ -414,6 +418,7 @@ struct ViewData {
     secondary_focus_keys: SecondaryFocusKeys,
     secondary_focus_root: rc::Weak<dyn IsView>,
     visibility: Visibility,
+    tab_index: i8,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -437,6 +442,10 @@ pub struct View {
     _set_visual_parent: fn(value: Option<&Rc<dyn IsView>>),
     #[non_virt]
     _secondary_focus_root: fn() -> Option<Rc<dyn IsView>>,
+    #[non_virt]
+    tab_index: fn() -> i8,
+    #[non_virt]
+    set_tab_index: fn(value: i8),
     #[non_virt]
     visibility: fn() -> Visibility,
     #[non_virt]
@@ -593,6 +602,7 @@ impl View {
                 secondary_focus_keys: SecondaryFocusKeys::None,
                 secondary_focus_root: <rc::Weak::<View>>::new(),
                 visibility: Visibility::Visible,
+                tab_index: i8::MAX,
             })
         }
     }
@@ -719,6 +729,14 @@ impl View {
 
     pub fn _secondary_focus_root_impl(this: &Rc<dyn IsView>) -> Option<Rc<dyn IsView>> {
         this.view().data.borrow().secondary_focus_root.upgrade()
+    }
+
+    pub fn tab_index_impl(this: &Rc<dyn IsView>) -> i8 {
+        this.view().data.borrow().tab_index
+    }
+
+    pub fn set_tab_index_impl(this: &Rc<dyn IsView>, value: i8) {
+        this.view().data.borrow_mut().tab_index = value;
     }
 
     pub fn visibility_impl(this: &Rc<dyn IsView>) -> Visibility {

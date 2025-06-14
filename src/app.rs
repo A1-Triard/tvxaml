@@ -325,7 +325,19 @@ impl App {
                 && (!primary_focus || !option_addr_eq(Some(Rc::as_ptr(&focus)), sfr.as_ref().map(Rc::as_ptr)))
                 && focus.visibility() == Visibility::Visible
             {
-                focus = focus.visual_child(if forward { 0 } else { focus_visual_children_count - 1 });
+                let parent = focus.clone();
+                let mut next_tab_index = if forward { i16::MAX } else { i16::MIN };
+                for i in 0 .. focus_visual_children_count {
+                    let child = parent.visual_child(i);
+                    let child_tab_index = i16::from(child.tab_index());
+                    if
+                           (forward && child_tab_index < next_tab_index)
+                        || (!forward && child_tab_index >= next_tab_index)
+                    {
+                        next_tab_index = child_tab_index;
+                        focus = child;
+                    }
+                }
             } else {
                 loop {
                     if
@@ -337,13 +349,38 @@ impl App {
                     let Some(parent) = focus.visual_parent() else { break; };
                     let children_count = parent.visual_children_count();
                     debug_assert!(children_count != 0);
-                    let index = (0 .. children_count).into_iter()
-                        .find(|&i| addr_eq(Rc::as_ptr(&parent.visual_child(i)), Rc::as_ptr(&focus)))
-                        .unwrap();
-                    if (forward && index == children_count - 1) || (!forward && index == 0) {
+                    let tab_index = i16::from(focus.tab_index());
+                    let mut before_focus = true;
+                    let mut next_tab_index = if forward { i16::MAX } else { i16::MIN };
+                    let mut next_tab = focus.clone();
+                    for i in 0 .. children_count {
+                        let child = parent.visual_child(i);
+                        if before_focus && addr_eq(Rc::as_ptr(&child), Rc::as_ptr(&focus)) {
+                            before_focus = false;
+                            continue;
+                        }
+                        let child_tab_index = i16::from(child.tab_index());
+                        if
+                               (
+                                      (forward && child_tab_index > tab_index)
+                                   || (!forward && child_tab_index < tab_index)
+                                   || (forward && !before_focus && child_tab_index == tab_index)
+                                   || (!forward && before_focus && child_tab_index == tab_index)
+                               )
+                            && (
+                                      (forward && child_tab_index < next_tab_index)
+                                   || (!forward && child_tab_index >= next_tab_index)
+                               )
+                        {
+                            next_tab_index = child_tab_index;
+                            next_tab = child;
+                        }
+
+                    }
+                    if addr_eq(Rc::as_ptr(&next_tab), Rc::as_ptr(&focus)) {
                         focus = parent;
                     } else {
-                        focus = parent.visual_child(if forward { index + 1 } else { index - 1});
+                        focus = next_tab;
                         break;
                     }
                 }

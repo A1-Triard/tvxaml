@@ -126,6 +126,7 @@ impl GroupBox {
         Box::new(AdornersPanelTemplate {
             children: vec![
                 Box::new(BorderTemplate {
+                    tab_index: Some(1),
                     name: "PART_Border".to_string(),
                     child: Some(Box::new(ContentPresenterTemplate {
                         name: "PART_ContentPresenter".to_string(),
@@ -135,6 +136,7 @@ impl GroupBox {
                     .. Default::default()
                 }),
                 Box::new(PaddingTemplate {
+                    tab_index: Some(0),
                     name: "PART_Padding".to_string(),
                     margin: Some(Thickness::new(1, 0, 1, 0)),
                     child: Some(Box::new(ContentPresenterTemplate {
