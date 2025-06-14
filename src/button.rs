@@ -17,9 +17,7 @@ struct ButtonData {
     color: (Fg, Bg),
     color_hotkey: (Fg, Bg),
     color_disabled: (Fg, Bg),
-    color_hotkey_disabled: (Fg, Bg),
     color_focused: (Fg, Bg),
-    color_hotkey_focused: (Fg, Bg),
     color_pressed: (Fg, Bg),
     click_handler: EventHandler<Option<Box<dyn FnMut()>>>,
     press_handler: EventHandler<Option<Box<dyn FnMut()>>>,
@@ -47,17 +45,9 @@ pub struct Button {
     #[non_virt]
     set_color_disabled: fn(value: (Fg, Bg)),
     #[non_virt]
-    color_hotkey_disabled: fn() -> (Fg, Bg),
-    #[non_virt]
-    set_color_hotkey_disabled: fn(value: (Fg, Bg)),
-    #[non_virt]
     color_focused: fn() -> (Fg, Bg),
     #[non_virt]
     set_color_focused: fn(value: (Fg, Bg)),
-    #[non_virt]
-    color_hotkey_focused: fn() -> (Fg, Bg),
-    #[non_virt]
-    set_color_hotkey_focused: fn(value: (Fg, Bg)),
     #[non_virt]
     color_pressed: fn() -> (Fg, Bg),
     #[non_virt]
@@ -103,9 +93,7 @@ impl Button {
                 color: (Fg::LightGray, Bg::None),
                 color_hotkey: (Fg::White, Bg::None),
                 color_disabled: (Fg::DarkGray, Bg::None),
-                color_hotkey_disabled: (Fg::LightGray, Bg::None),
                 color_focused: (Fg::LightGray, Bg::Blue),
-                color_hotkey_focused: (Fg::White, Bg::Blue),
                 color_pressed: (Fg::Blue, Bg::None),
                 click_handler: Default::default(),
                 press_handler: Default::default(),
@@ -178,19 +166,6 @@ impl Button {
         this.invalidate_render();
     }
 
-    pub fn color_hotkey_disabled_impl(this: &Rc<dyn IsButton>) -> (Fg, Bg) {
-        this.button().data.borrow().color_hotkey_disabled
-    }
-
-    pub fn set_color_hotkey_disabled_impl(this: &Rc<dyn IsButton>, value: (Fg, Bg)) {
-        {
-            let mut data = this.button().data.borrow_mut();
-            if data.color_hotkey_disabled == value { return; }
-            data.color_hotkey_disabled = value;
-        }
-        this.invalidate_render();
-    }
-
     pub fn color_focused_impl(this: &Rc<dyn IsButton>) -> (Fg, Bg) {
         this.button().data.borrow().color_focused
     }
@@ -200,19 +175,6 @@ impl Button {
             let mut data = this.button().data.borrow_mut();
             if data.color_focused == value { return; }
             data.color_focused = value;
-        }
-        this.invalidate_render();
-    }
-
-    pub fn color_hotkey_focused_impl(this: &Rc<dyn IsButton>) -> (Fg, Bg) {
-        this.button().data.borrow().color_hotkey_focused
-    }
-
-    pub fn set_color_hotkey_focused_impl(this: &Rc<dyn IsButton>, value: (Fg, Bg)) {
-        {
-            let mut data = this.button().data.borrow_mut();
-            if data.color_hotkey_focused == value { return; }
-            data.color_hotkey_focused = value;
         }
         this.invalidate_render();
     }
@@ -257,11 +219,11 @@ impl Button {
         } else {
             match (is_enabled, is_focused) {
                 (true, false) => (data.color, data.color_hotkey),
-                (true, true) => (data.color_focused, data.color_hotkey_focused),
-                (false, false) => (data.color_disabled, data.color_hotkey_disabled),
+                (true, true) => (data.color_focused, data.color_focused),
+                (false, false) => (data.color_disabled, data.color_disabled),
                 (false, true) => (
                     (data.color_disabled.0, data.color_focused.1),
-                    (data.color_hotkey_disabled.0, data.color_hotkey_focused.1)
+                    (data.color_disabled.0, data.color_focused.1)
                 )
             }
         };
@@ -379,13 +341,7 @@ macro_rules! button_template {
                 pub color_focused: Option<($crate::base::Fg, $crate::base::Bg)>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub color_hotkey_focused: Option<($crate::base::Fg, $crate::base::Bg)>,
-                #[serde(default)]
-                #[serde(skip_serializing_if="Option::is_none")]
                 pub color_disabled: Option<($crate::base::Fg, $crate::base::Bg)>,
-                #[serde(default)]
-                #[serde(skip_serializing_if="Option::is_none")]
-                pub color_hotkey_disabled: Option<($crate::base::Fg, $crate::base::Bg)>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub color_pressed: Option<($crate::base::Fg, $crate::base::Bg)>,
@@ -411,9 +367,7 @@ macro_rules! button_apply_template {
             $this.color.map(|x| obj.set_color(x));
             $this.color_hotkey.map(|x| obj.set_color_hotkey(x));
             $this.color_focused.map(|x| obj.set_color_focused(x));
-            $this.color_hotkey_focused.map(|x| obj.set_color_hotkey_focused(x));
             $this.color_disabled.map(|x| obj.set_color_disabled(x));
-            $this.color_hotkey_disabled.map(|x| obj.set_color_hotkey_disabled(x));
             $this.color_pressed.map(|x| obj.set_color_pressed(x));
         }
     };

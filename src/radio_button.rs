@@ -252,11 +252,11 @@ impl RadioButton {
         let is_checked = this.is_checked();
         let (color, color_hotkey) = match (is_enabled, is_focused) {
             (true, false) => (this.color(), this.color_hotkey()),
-            (true, true) => (this.color_focused(), this.color_hotkey_focused()),
-            (false, false) => (this.color_disabled(), this.color_hotkey_disabled()),
+            (true, true) => (this.color_focused(), this.color_focused()),
+            (false, false) => (this.color_disabled(), this.color_disabled()),
             (false, true) => (
                 (this.color_disabled().0, this.color_focused().1),
-                (this.color_hotkey_disabled().0, this.color_hotkey_focused().1)
+                (this.color_disabled().0, this.color_focused().1)
             ),
         };
         rp.text(Point { x: 1, y: 0 }, color, if is_checked { "*" } else { " " });
