@@ -1092,12 +1092,12 @@ impl View {
         if let Some(app) = this.app() {
             if let Some(focused) = app.focused(true) {
                 if child.is_visual_ancestor_of(focused) {
-                    app.focus(None, true);
+                    app.focus(None, Some(true));
                 }
             }
             if let Some(focused) = app.focused(false) {
                 if child.is_visual_ancestor_of(focused) {
-                    app.focus(None, false);
+                    app.focus(None, Some(false));
                 }
             }
         }

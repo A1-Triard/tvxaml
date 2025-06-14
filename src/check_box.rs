@@ -2,7 +2,8 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use std::ptr::addr_eq;
-use crate::base::label_width;
+use crate::app::AppExt;
+use crate::base::{label_width, label};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 
@@ -71,6 +72,10 @@ pub struct CheckBox {
     key: (),
     #[over]
     _init: (),
+    #[over]
+    pre_post_process: (),
+    #[over]
+    post_process_key: (),
 }
 
 impl CheckBox {
@@ -273,6 +278,24 @@ impl CheckBox {
             return true;
         }
         View::key_impl(this, key, original_source)
+    }
+
+    pub fn pre_post_process_impl(_this: &Rc<dyn IsView>) -> PrePostProcess {
+        PrePostProcess::POST_PROCESS
+    }
+
+    pub fn post_process_key_impl(this: &Rc<dyn IsView>, key: Key) -> bool {
+        let check_box: Rc<dyn IsCheckBox> = dyn_cast_rc(this.clone()).unwrap();
+        if let Some(hot_key) = label(&check_box.text()) {
+            match key {
+                Key::Char(c) | Key::Alt(c) if c == hot_key => {
+                    this.app().unwrap().focus(Some(this), None);
+                    return true;
+                },
+                _ => { }
+            }
+        }
+        View::post_process_key_impl(this, key)
     }
 }
 

@@ -80,7 +80,7 @@ pub struct App {
     #[non_virt]
     invalidate_render: fn(rect: Rect),
     #[non_virt]
-    focus: fn(view: Option<&Rc<dyn IsView>>, primary_focus: bool),
+    focus: fn(view: Option<&Rc<dyn IsView>>, primary_focus: Option<bool>),
     #[non_virt]
     focused: fn(primary_focus: bool) -> Option<Rc<dyn IsView>>,
     #[non_virt]
@@ -211,7 +211,8 @@ impl App {
                 },
                 Ok(Some(Event::Key(n, key))) => {
                     'c: for _ in 0 .. n.get() {
-                        for pre_process in this.app().data.borrow().pre_process.clone() {
+                        let pre_process = this.app().data.borrow().pre_process.clone();
+                        for pre_process in pre_process {
                             let pre_process = pre_process.upgrade().unwrap();
                             if pre_process.is_enabled() && pre_process.pre_process_key(key) { continue 'c; }
                         }
@@ -221,7 +222,8 @@ impl App {
                         if let Some(focused) = this.focused(false) {
                             if focused.is_enabled() && focused._raise_key(key) { continue; }
                         }
-                        for post_process in this.app().data.borrow().post_process.clone() {
+                        let post_process = this.app().data.borrow().post_process.clone();
+                        for post_process in post_process {
                             let post_process = post_process.upgrade().unwrap();
                             if post_process.is_enabled() && post_process.post_process_key(key) { continue 'c; }
                         }
@@ -264,8 +266,8 @@ impl App {
                 clock.sleep_ms_u16((1000 / FPS).saturating_sub(ms));
             }
         };
-        this.focus(None, true);
-        this.focus(None, false);
+        this.focus(None, Some(true));
+        this.focus(None, Some(false));
         root._detach_from_app();
         let mut data = this.app().data.borrow_mut();
         *clock = Some(data.clock.take().unwrap());
@@ -304,7 +306,7 @@ impl App {
             };
             if !root.is_enabled() || !root._is_visible_core() { return; }
             if root.allow_focus() {
-                this.focus(Some(&root), primary_focus);
+                this.focus(Some(&root), Some(primary_focus));
                 return;
             }
             root
@@ -391,7 +393,7 @@ impl App {
             }
             if focus.visibility() != Visibility::Visible { continue; }
             if focus.allow_focus() && focus.is_enabled() {
-                this.focus(Some(&focus), primary_focus);
+                this.focus(Some(&focus), Some(primary_focus));
                 return;
             }
         }
@@ -414,7 +416,22 @@ impl App {
         }
     }
 
-    pub fn focus_impl(this: &Rc<dyn IsApp>, view: Option<&Rc<dyn IsView>>, primary_focus: bool) {
+    pub fn focus_impl(this: &Rc<dyn IsApp>, view: Option<&Rc<dyn IsView>>, primary_focus: Option<bool>) {
+        assert!(view.is_some() || primary_focus.is_some(), "incorrect args");
+        let primary_focus = if let Some(primary_focus) = primary_focus {
+            primary_focus
+        } else {
+            let sfr = {
+                let data = this.app().data.borrow();
+                let root = data.root.as_ref().expect("app is not running");
+                root._secondary_focus_root()
+            };
+            if let Some(sfr) = sfr {
+                !sfr.is_visual_ancestor_of(view.unwrap().clone())
+            } else {
+                true
+            }
+        };
         view.map(|x| assert!(option_addr_eq(x.app().map(|x| Rc::as_ptr(&x)), Some(Rc::as_ptr(this)))));
         let prev = {
             let mut data = this.app().data.borrow_mut();
