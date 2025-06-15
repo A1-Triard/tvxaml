@@ -10,12 +10,10 @@ use core::mem::{size_of};
 use core::ptr::NonNull;
 use either::{Left, Right};
 use int_vec_2d::{Point, Range1d, Vector, Rect};
-use itertools::Itertools;
 use libc::*;
 use panicking::panicking;
 use tvxaml_screen_base::*;
 use tvxaml_screen_base::Screen as base_Screen;
-use unicode_width::UnicodeWidthChar;
 
 struct Line {
     window: NonNull<WINDOW>,
@@ -201,22 +199,18 @@ impl<A: Allocator> base_Screen for Screen<A> {
         let line = &mut self.chs[usize::from(p.y as u16) * self.cols .. (usize::from(p.y as u16) + 1) * self.cols];
         self.lines[p.y as u16 as usize].invalidated = true;
         let attr = unsafe { attr_ch(fg, bg) };
-        let graphemes = text.chars().filter(|&c| c != '\0' && c.width().is_some()).peekable().batching(|text| {
-            let (c, w) = loop {
-                let c = text.next()?;
-                let w = c.width().unwrap();
-                if w != 0 { break (c, w); }
-            };
+        let graphemes = graphemes(text).map(|(g, w)| {
             let mut grapheme = ['\0'; CCHARW_MAX];
-            grapheme[0] = c;
+            let mut chars = text[g].chars();
+            grapheme[0] = chars.next().unwrap();
             for g in grapheme[1 ..].iter_mut() {
-                if let Some(c) = text.next_if(|x| x.width().unwrap() == 0) {
+                if let Some(c) = chars.next() {
                     *g = c;
                 } else {
                     break;
                 }
             }
-            Some((grapheme, w))
+            (grapheme, w)
         });
         let mut x0 = None;
         let mut x = p.x;
@@ -224,7 +218,6 @@ impl<A: Allocator> base_Screen for Screen<A> {
         for (g, w) in graphemes {
             if x >= hard.end { break; }
             if n >= text_end { break; }
-            let w = min(w, i16::MAX as u16 as usize) as u16 as i16;
             n = n.saturating_add(w);
             let before_text_start = n <= text_start;
             if before_text_start {

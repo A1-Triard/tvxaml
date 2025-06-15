@@ -17,10 +17,10 @@ composable-allocators = "0.3.0"
 either = { version = "1.9.0", default-features = false }
 errno-no-std = { version = "0.2.2", default-features = false }
 int-vec-2d = "0.2.0"
-itertools = { version = "0.13.0", default-features = false }
 libc = { version = "0.2.147", default-features = false }
 panicking = { version = "0.5.0", default-features = false }
 tvxaml-screen-base = { path = "../screen-base", version = "0.1.0" }
+unicode-normalization = { version = "0.1.24", default-features = false }
 unicode-width = "0.2.0"
 
 [build-dependencies]

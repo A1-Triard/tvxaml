@@ -12,8 +12,7 @@ mod text_renderer {
     use std::iter::{self};
     use std::mem::{replace, transmute};
     use std::slice::{self};
-    use crate::base::{Point, Rect, Vector, HAlign, Range1d, text_width, trim_text, TextWrapping};
-    use unicode_width::UnicodeWidthChar;
+    use crate::base::{graphemes, Point, Rect, Vector, HAlign, Range1d, text_width, trim_text, TextWrapping};
 
     pub fn render_text(
         mut r: impl FnMut(Point, &str),
@@ -54,7 +53,7 @@ mod text_renderer {
                             .identify_first()
                             .map(move |(first, (g, w))| (
                                 if first { s } else { false },
-                                g,
+                                &x[g],
                                 min(w as u16, bounds.w() as u16) as i16
                             ))
                     )
@@ -177,26 +176,6 @@ mod text_renderer {
                 Range1d { start, end: x }
             },
         }
-    }
-
-    fn graphemes(word: &str) -> impl Iterator<Item=(&str, i16)> {
-        word.char_indices().peekable().batching(|i| {
-            let (start, w) = loop {
-                let Some(c) = i.next() else { return None; };
-                let Some(w) = c.1.width() else { continue; };
-                if w == 0 { continue; }
-                break (c, w as u16 as i16);
-            };
-            let mut end = start;
-            loop {
-                let Some(&c) = i.peek() else { break; };
-                let Some(w) = c.1.width() else { continue; };
-                if w != 0 { break; }
-                i.next();
-                end = c;
-            }
-            Some((&word[start.0 .. end.0 + end.1.len_utf8()], w))
-        })
     }
 
     fn wrap<'a>(

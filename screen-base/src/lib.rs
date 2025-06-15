@@ -21,7 +21,9 @@ extern crate alloc;
 use alloc::boxed::Box;
 use core::alloc::Allocator;
 use core::fmt::{self, Debug, Display, Formatter};
+use core::iter::{Iterator, DoubleEndedIterator, FusedIterator};
 use core::num::NonZeroU16;
+use core::ops::Range;
 use enum_derive_2018::{EnumDisplay, EnumFromStr, IterVariants};
 use int_vec_2d::{Point, Vector, Range1d};
 use macro_attr_2018::macro_attr;
@@ -67,6 +69,67 @@ pub fn is_text_fit_in(w: i16, s: &str) -> bool {
     }
     true
 }
+
+pub fn graphemes(text: &str) -> Graphemes {
+    Graphemes(text)
+}
+
+pub struct Graphemes<'a>(&'a str);
+
+impl<'a> Iterator for Graphemes<'a> {
+    type Item = (Range<usize>, i16);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut chars = self.0.char_indices();
+        let (start, w) = loop {
+            let Some(c) = chars.next() else { return None; };
+            if c.1 == '\0' { continue; }
+            let Some(w) = c.1.width() else { continue; };
+            if w == 0 { continue; }
+            break (c, i16::try_from(w).unwrap());
+        };
+        let mut end = start;
+        loop {
+            let Some(c) = chars.next() else { break; };
+            if c.1 == '\0' { break; }
+            let Some(w) = c.1.width() else { break; };
+            if w != 0 { break; }
+            end = c;
+        }
+        let end = end.0 + end.1.len_utf8();
+        let item = (start.0 .. end, w);
+        self.0 = &self.0[end ..];
+        Some(item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.0.len()))
+    }
+}
+
+impl<'a> DoubleEndedIterator for Graphemes<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let mut chars = self.0.char_indices();
+        'end: loop {
+            let Some(c) = chars.next_back() else { return None; };
+            if c.1 == '\0' { continue; }
+            let Some(w) = c.1.width() else { continue; };
+            let end = c;
+            let mut start = (c, i16::try_from(w).unwrap());
+            while start.1 == 0 {
+                let Some(c) = chars.next_back() else { return None; };
+                if c.1 == '\0' { continue 'end; }
+                let Some(w) = c.1.width() else { continue 'end; };
+                start = (c, i16::try_from(w).unwrap());
+            }
+            let item = (start.0.0 .. end.0 + end.1.len_utf8(), start.1);
+            self.0 = &self.0[.. start.0.0];
+            break Some(item);
+        }
+    }
+}
+
+impl<'a> FusedIterator for Graphemes<'a> { }
 
 macro_attr! {
     #[derive(Eq, PartialEq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]

@@ -1,0 +1,368 @@
+use basic_oop::{class_unsafe, import, Vtable};
+use dynamic_cast::dyn_cast_rc;
+use std::cell::RefCell;
+use std::mem::replace;
+use std::ops::Range;
+use std::rc::{self};
+use crate::base::{text_width, VAlign, graphemes};
+use crate::event_handler::EventHandler;
+use crate::template::{Template, NameResolver};
+
+import! { pub input_line:
+    use [view crate::view];
+    use crate::base::{Fg, Bg, HAlign};
+}
+
+struct InputLineData {
+    text: String,
+    color: (Fg, Bg),
+    color_focused: (Fg, Bg),
+    color_disabled: (Fg, Bg),
+    view: Range<usize>,
+    cursor: usize,
+    width: i16,
+    text_align: HAlign,
+    text_change_handler: EventHandler<Option<Box<dyn FnMut()>>>,
+}
+
+#[derive(Clone)]
+pub struct TextBuf {
+    owner: rc::Weak<dyn IsInputLine>,
+}
+
+impl ToString for TextBuf {
+    fn to_string(&self) -> String {
+        self.owner.upgrade().unwrap().input_line().data.borrow().text.clone()
+    }
+}
+
+impl TextBuf {
+    pub fn change<T>(&self, f: impl FnOnce(&mut String) -> T) -> T {
+        let res = {
+            let owner = self.owner.upgrade().unwrap();
+            let mut data = owner.input_line().data.borrow_mut();
+            f(&mut data.text)
+        };
+        let owner = self.owner.upgrade().unwrap();
+        InputLine::reset_view(&owner);
+        owner.text_changed();
+        res
+    }
+
+    pub fn set(&self, s: String) {
+        self.change(|x| *x = s);
+    }
+
+    pub fn replace(&self, s: String) -> String {
+        self.change(|x| replace(x, s))
+    }
+}
+
+#[class_unsafe(inherits_View)]
+pub struct InputLine {
+    data: RefCell<InputLineData>,
+    #[non_virt]
+    text: fn() -> TextBuf,
+    #[non_virt]
+    text_align: fn() -> HAlign,
+    #[non_virt]
+    set_text_align: fn(value: HAlign),
+    #[non_virt]
+    color: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color: fn(value: (Fg, Bg)),
+    #[non_virt]
+    color_focused: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color_focused: fn(value: (Fg, Bg)),
+    #[non_virt]
+    color_disabled: fn() -> (Fg, Bg),
+    #[non_virt]
+    set_color_disabled: fn(value: (Fg, Bg)),
+    #[over]
+    is_enabled_changed: (),
+    #[over]
+    measure_override: (),
+    #[over]
+    arrange_override: (),
+    #[over]
+    render: (),
+    #[over]
+    _init: (),
+    #[over]
+    is_focused_changed: (),
+    #[non_virt]
+    handle_text_change: fn(handler: Option<Box<dyn FnMut()>>),
+    #[virt]
+    text_changed: fn(),
+}
+
+impl InputLine {
+    pub fn new() -> Rc<dyn IsInputLine> {
+        let res: Rc<dyn IsInputLine> = Rc::new(unsafe { Self::new_raw(INPUT_LINE_VTABLE.as_ptr()) });
+        res._init();
+        res
+    }
+
+    pub unsafe fn new_raw(vtable: Vtable) -> Self {
+        InputLine {
+            view: unsafe { View::new_raw(vtable) },
+            data: RefCell::new(InputLineData {
+                text: String::new(),
+                color: (Fg::LightGray, Bg::Blue),
+                color_focused: (Fg::LightGray, Bg::Blue),
+                color_disabled: (Fg::DarkGray, Bg::Blue),
+                text_change_handler: Default::default(),
+                cursor: 0,
+                view: 0 .. 0,
+                text_align: HAlign::Left,
+                width: 0,
+            }),
+        }
+    }
+
+    pub fn _init_impl(this: &Rc<dyn IsView>) {
+        View::_init_impl(this);
+        this.set_allow_focus(true);
+    }
+
+    pub fn is_enabled_changed_impl(this: &Rc<dyn IsView>) {
+        View::is_enabled_changed_impl(this);
+        this.invalidate_render();
+    }
+
+    pub fn text_impl(this: &Rc<dyn IsInputLine>) -> TextBuf {
+        TextBuf { owner: Rc::downgrade(this) }
+    }
+
+    pub fn text_changed_impl(this: &Rc<dyn IsInputLine>) {
+        let mut invoke = this.input_line().data.borrow_mut().text_change_handler.begin_invoke();
+        invoke.as_mut().map(|x| x());
+        this.input_line().data.borrow_mut().text_change_handler.end_invoke(invoke);
+    }
+
+    pub fn text_align_impl(this: &Rc<dyn IsInputLine>) -> HAlign {
+        this.input_line().data.borrow().text_align
+    }
+
+    pub fn set_text_align_impl(this: &Rc<dyn IsInputLine>, value: HAlign) {
+        {
+            let mut data = this.input_line().data.borrow_mut();
+            if data.text_align == value { return; }
+            data.text_align = value;
+        }
+        this.invalidate_render();
+    }
+
+    pub fn color_impl(this: &Rc<dyn IsInputLine>) -> (Fg, Bg) {
+        this.input_line().data.borrow().color
+    }
+
+    pub fn set_color_impl(this: &Rc<dyn IsInputLine>, value: (Fg, Bg)) {
+        {
+            let mut data = this.input_line().data.borrow_mut();
+            if data.color == value { return; }
+            data.color = value;
+        }
+        this.invalidate_render();
+    }
+
+    pub fn color_focused_impl(this: &Rc<dyn IsInputLine>) -> (Fg, Bg) {
+        this.input_line().data.borrow().color_focused
+    }
+
+    pub fn set_color_focused_impl(this: &Rc<dyn IsInputLine>, value: (Fg, Bg)) {
+        {
+            let mut data = this.input_line().data.borrow_mut();
+            if data.color_focused == value { return; }
+            data.color_focused = value;
+        }
+        this.invalidate_render();
+    }
+
+    pub fn color_disabled_impl(this: &Rc<dyn IsInputLine>) -> (Fg, Bg) {
+        this.input_line().data.borrow().color_disabled
+    }
+
+    pub fn set_color_disabled_impl(this: &Rc<dyn IsInputLine>, value: (Fg, Bg)) {
+        {
+            let mut data = this.input_line().data.borrow_mut();
+            if data.color_disabled == value { return; }
+            data.color_disabled = value;
+        }
+        this.invalidate_render();
+    }
+
+    pub fn measure_override_impl(_this: &Rc<dyn IsView>, w: Option<i16>, _h: Option<i16>) -> Vector {
+        Vector { x: w.unwrap_or(1), y: 1 }
+    }
+
+    pub fn arrange_override_impl(this: &Rc<dyn IsView>, bounds: Rect) -> Vector {
+        let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+        this.input_line().data.borrow_mut().width = Thickness::new(1, 0, 1, 0).shrink_rect(bounds).w();
+        Self::reset_view(&this);
+        Vector { x: bounds.w(), y: 1 }
+    }
+
+    fn reset_view(this: &Rc<dyn IsInputLine>) {
+        let is_focused = this.is_focused(None);
+        let mut data = this.input_line().data.borrow_mut();
+        data.cursor = data.text.len();
+        data.view = 0 .. data.text.len();
+        if is_focused {
+            data.view.start = graphemes(&data.text).rev().scan(0i16, |w, (g, g_w)| {
+                *w = (*w).wrapping_add(g_w);
+                if *w > data.width { None } else { Some(g) }
+            }).last().map_or(data.text.len(), |x| x.start);
+        } else {
+            data.view.end = graphemes(&data.text).scan(0i16, |w, (g, g_w)| {
+                *w = (*w).wrapping_add(g_w);
+                if *w > data.width { None } else { Some(g) }
+            }).last().map_or(0, |x| x.end);
+        }
+        this.invalidate_render();
+    }
+
+    pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
+        let bounds = this.inner_render_bounds();
+        let is_enabled = this.is_enabled();
+        let is_focused = this.is_focused(None);
+        let is_focused_primary = this.is_focused(Some(true));
+        let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+        let data = this.input_line().data.borrow();
+        let color = match (is_enabled, is_focused) {
+            (true, true) => data.color_focused,
+            (true, false) => data.color,
+            (false, true) => (data.color_disabled.0, data.color_focused.1),
+            (false, false) => data.color_disabled
+        };
+        rp.fill_bg(color);
+        let align = Thickness::align(
+            Vector { x: text_width(&data.text[data.view.clone()]), y: 1 },
+            Thickness::new(1, 0, 1, 0).shrink_rect_size(Vector { x: data.width, y: 1 }),
+            data.text_align,
+            VAlign::Top
+        );
+        let text_start = align.shrink_rect(Thickness::new(1, 0, 1, 0).shrink_rect(bounds)).tl;
+        rp.text(
+            text_start,
+            color,
+            &data.text[data.view.clone()]
+        );
+        if data.view.start > 0 {
+            rp.text(Point { x: 0, y: 0 }, color, "◄");
+        }
+        if data.view.end < data.text.len() {
+            rp.text(bounds.tr_inner(), color, "►");
+        }
+        if is_focused_primary && data.view.contains(&data.cursor) {
+            let cursor_x = text_width(&data.text[data.view.start .. data.cursor]);
+            rp.cursor(text_start.offset(Vector { x: cursor_x, y: 0 }));
+        }
+    }
+
+    pub fn is_focused_changed_impl(this: &Rc<dyn IsView>, primary_focus: bool) {
+        View::is_focused_changed_impl(this, primary_focus);
+        let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+        Self::reset_view(&this);
+    }
+
+    pub fn handle_text_change_impl(this: &Rc<dyn IsInputLine>, handler: Option<Box<dyn FnMut()>>) {
+        this.input_line().data.borrow_mut().text_change_handler.set(handler);
+    }
+
+    /*
+    pub fn key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
+        if key == Key::Char(' ') {
+            Self::click(&dyn_cast_rc(this.clone()).unwrap());
+            return true;
+        }
+        View::key_impl(this, key, original_source)
+    }
+    */
+}
+
+#[macro_export]
+macro_rules! input_line_template {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $name:ident in $mod:ident {
+            $(use $path:path as $import:ident;)*
+
+            $($(
+                $(#[$field_attr:meta])*
+                pub $field_name:ident : $field_ty:ty
+            ),+ $(,)?)?
+        }
+    ) => {
+        $crate::view_template! {
+            $(#[$attr])*
+            $vis struct $name in $mod {
+                $(use $path as $import;)*
+
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub text_align: Option<$crate::base::HAlign>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_hotkey: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_focused: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub color_disabled: Option<($crate::base::Fg, $crate::base::Bg)>,
+                $($(
+                    $(#[$field_attr])*
+                    pub $field_name : $field_ty
+                ),+)?
+            }
+        }
+    };
+}
+ 
+#[macro_export]
+macro_rules! input_line_apply_template {
+    ($this:ident, $instance:ident, $names:ident) => {
+        $crate::view_apply_template!($this, $instance, $names);
+        {
+            use $crate::input_line::InputLineExt;
+
+            let obj: $crate::alloc_rc_Rc<dyn $crate::input_line::IsInputLine>
+                = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
+            $this.text_align.map(|x| obj.set_text_align(x));
+            $this.color.map(|x| obj.set_color(x));
+            $this.color_focused.map(|x| obj.set_color_focused(x));
+            $this.color_disabled.map(|x| obj.set_color_disabled(x));
+        }
+    };
+}
+
+input_line_template! {
+    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[serde(rename="InputLine")]
+    pub struct InputLineTemplate in template { }
+}
+
+#[typetag::serde(name="InputLine")]
+impl Template for InputLineTemplate {
+    fn is_name_scope(&self) -> bool {
+        self.is_name_scope
+    }
+
+    fn name(&self) -> Option<&String> {
+        Some(&self.name)
+    }
+
+    fn create_instance(&self) -> Rc<dyn IsObj> {
+        InputLine::new()
+    }
+
+    fn apply(&self, instance: &Rc<dyn IsObj>, names: &mut NameResolver) {
+        let this = self;
+        input_line_apply_template!(this, instance, names);
+    }
+}

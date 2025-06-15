@@ -14,6 +14,7 @@ use libc::*;
 use panicking::panicking;
 use tvxaml_screen_base::*;
 use tvxaml_screen_base::Screen as base_Screen;
+use unicode_normalization::UnicodeNormalization;
 use unicode_width::UnicodeWidthChar;
 
 struct Line {
@@ -277,8 +278,7 @@ impl<A: Allocator> base_Screen for Screen<A> {
         let chs = &mut self.chs[usize::from(p.y as u16) * self.cols .. (usize::from(p.y as u16) + 1) * self.cols];
         self.lines[p.y as u16 as usize].invalidated = true;
         let attr = unsafe { attr_ch(fg, bg) };
-        let text = text.chars()
-            .filter(|&x| x != '\0' && x.width().is_some())
+        let text = graphemes(text).map(|(g, _)| text[g].chars().nfc().next().unwrap())
             .flat_map(|c| encode_char(self.cd, c).map_or_else(
                 || Left(repeat(A_ALTCHARSET | 96).take(c.width().unwrap())),
                 |c| Right(once(c))
