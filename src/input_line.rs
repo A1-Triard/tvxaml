@@ -349,6 +349,24 @@ impl InputLine {
                     return true;
                 } 
             }, 
+            Key::Home => {
+                let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+                this.input_line().data.borrow_mut().cursor = 0;
+                Self::calc_view_end(&this, 0);
+                this.invalidate_render();
+                return true;
+            },
+            Key::End => {
+                let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+                let text_len = {
+                    let mut data = this.input_line().data.borrow_mut();
+                    data.cursor = data.text.len();
+                    data.text.len()
+                };
+                Self::calc_view_start(&this, text_len);
+                this.invalidate_render();
+                return true;
+            },
             _ => { },
         }
         View::key_impl(this, key, original_source)
