@@ -95,6 +95,8 @@ pub struct InputLine {
     handle_text_change: fn(handler: Option<Box<dyn FnMut()>>),
     #[virt]
     text_changed: fn(),
+    #[over]
+    key: (),
 }
 
 impl InputLine {
@@ -206,31 +208,41 @@ impl InputLine {
 
     fn reset_view(this: &Rc<dyn IsInputLine>) {
         let is_focused = this.is_focused(None);
-        let mut data = this.input_line().data.borrow_mut();
-        data.cursor = data.text.len();
+        let is_numeric = {
+            let mut data = this.input_line().data.borrow_mut();
+            data.cursor = data.text.len();
+            data.is_numeric
+        };
         if is_focused {
+            let mut data = this.input_line().data.borrow_mut();
             let start = graphemes(&data.text).rev().scan(1i16, |w, (g, g_w)| {
                 *w = (*w).wrapping_add(g_w);
                 if *w > data.width { None } else { Some(g) }
             }).last().map_or(data.text.len(), |x| x.start);
             data.view = Some(start ..= data.text.len());
-        } else if data.is_numeric {
+        } else if is_numeric {
+            let mut data = this.input_line().data.borrow_mut();
             let view = graphemes(&data.text).rev().scan(0i16, |w, (g, g_w)| {
                 *w = (*w).wrapping_add(g_w);
                 if *w > data.width { None } else { Some(g) }
             }).last().map(|x| x.start ..= data.text.len() - 1);
             data.view = view;
         } else {
-            let view = graphemes(&data.text)
-                .map(|(g, g_w)| (g.start ..= g.end - 1, g_w))
-                .scan(0i16, |w, (g, g_w)| {
-                    *w = (*w).wrapping_add(g_w);
-                    if *w > data.width { None } else { Some(g) }
-                })
-                .last().map(|x| 0 ..= *x.end());
-            data.view = view;
+            Self::calc_view_end(this, 0);
         }
         this.invalidate_render();
+    }
+
+    fn calc_view_end(this: &Rc<dyn IsInputLine>, view_start: usize) {
+        let mut data = this.input_line().data.borrow_mut();
+        let view = graphemes(&data.text[view_start .. ])
+            .map(|(g, g_w)| (g.start ..= g.end - 1, g_w))
+            .scan(0i16, |w, (g, g_w)| {
+                *w = (*w).wrapping_add(g_w);
+                if *w > data.width { None } else { Some(g) }
+            })
+            .last().map(|x| view_start ..= view_start + *x.end());
+        data.view = view;
     }
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
@@ -285,15 +297,30 @@ impl InputLine {
         this.input_line().data.borrow_mut().text_change_handler.set(handler);
     }
 
-    /*
     pub fn key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
-        if key == Key::Char(' ') {
-            Self::click(&dyn_cast_rc(this.clone()).unwrap());
-            return true;
+        if key == Key::Left {
+            let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+            let view_start = {
+                let mut data = this.input_line().data.borrow_mut();
+                if let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() {
+                    data.cursor = g.start;
+                    if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
+                        Some(None)
+                    } else {
+                        Some(Some(data.cursor))
+                    }
+                } else {
+                    None
+                }
+            };
+            if let Some(view_start) = view_start {
+                view_start.map(|x| Self::calc_view_end(&this, x));
+                this.invalidate_render();
+                return true;
+            }
         }
         View::key_impl(this, key, original_source)
     }
-    */
 }
 
 #[macro_export]
