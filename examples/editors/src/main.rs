@@ -34,8 +34,8 @@ fn start() -> Result<u8, tvxaml::base::Error> {
     let (root, names) = ui.load_root();
     let edit1: Rc<dyn IsInputLine> = dyn_cast_rc(names.find("edit1").unwrap().clone()).unwrap();
     let edit2: Rc<dyn IsInputLine> = dyn_cast_rc(names.find("edit2").unwrap().clone()).unwrap();
-    edit1.text().set("Abcd".to_string());
-    edit2.text().set("Abcd".to_string());
+    edit1.text().set("Abcd efghijkl".to_string());
+    edit2.text().set("Abcd efghijkl".to_string());
     let app = App::new(screen);
     let root: Rc<dyn IsView> = dyn_cast_rc(root).unwrap();
     {

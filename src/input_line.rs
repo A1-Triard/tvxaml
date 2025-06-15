@@ -2,16 +2,15 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use std::mem::replace;
-use std::iter::once;
 use std::ops::RangeInclusive;
 use std::rc::{self};
-use crate::base::{text_width, VAlign, graphemes};
+use crate::base::{text_width, VAlign, graphemes, HAlign};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 
 import! { pub input_line:
     use [view crate::view];
-    use crate::base::{Fg, Bg, HAlign};
+    use crate::base::{Fg, Bg};
 }
 
 struct InputLineData {
@@ -19,10 +18,10 @@ struct InputLineData {
     color: (Fg, Bg),
     color_focused: (Fg, Bg),
     color_disabled: (Fg, Bg),
-    view: RangeInclusive<usize>,
+    view: Option<RangeInclusive<usize>>,
     cursor: usize,
     width: i16,
-    text_align: HAlign,
+    is_numeric: bool,
     text_change_handler: EventHandler<Option<Box<dyn FnMut()>>>,
 }
 
@@ -65,9 +64,9 @@ pub struct InputLine {
     #[non_virt]
     text: fn() -> TextBuf,
     #[non_virt]
-    text_align: fn() -> HAlign,
+    is_numeric: fn() -> bool,
     #[non_virt]
-    set_text_align: fn(value: HAlign),
+    set_is_numeric: fn(value: bool),
     #[non_virt]
     color: fn() -> (Fg, Bg),
     #[non_virt]
@@ -115,8 +114,8 @@ impl InputLine {
                 color_disabled: (Fg::DarkGray, Bg::Blue),
                 text_change_handler: Default::default(),
                 cursor: 0,
-                view: 0 ..= 0,
-                text_align: HAlign::Left,
+                view: None,
+                is_numeric: false,
                 width: 0,
             }),
         }
@@ -142,17 +141,17 @@ impl InputLine {
         this.input_line().data.borrow_mut().text_change_handler.end_invoke(invoke);
     }
 
-    pub fn text_align_impl(this: &Rc<dyn IsInputLine>) -> HAlign {
-        this.input_line().data.borrow().text_align
+    pub fn is_numeric_impl(this: &Rc<dyn IsInputLine>) -> bool {
+        this.input_line().data.borrow().is_numeric
     }
 
-    pub fn set_text_align_impl(this: &Rc<dyn IsInputLine>, value: HAlign) {
+    pub fn set_is_numeric_impl(this: &Rc<dyn IsInputLine>, value: bool) {
         {
             let mut data = this.input_line().data.borrow_mut();
-            if data.text_align == value { return; }
-            data.text_align = value;
+            if data.is_numeric == value { return; }
+            data.is_numeric = value;
         }
-        this.invalidate_render();
+        Self::reset_view(this);
     }
 
     pub fn color_impl(this: &Rc<dyn IsInputLine>) -> (Fg, Bg) {
@@ -214,17 +213,22 @@ impl InputLine {
                 *w = (*w).wrapping_add(g_w);
                 if *w > data.width { None } else { Some(g) }
             }).last().map_or(data.text.len(), |x| x.start);
-            data.view = start ..= data.text.len();
+            data.view = Some(start ..= data.text.len());
+        } else if data.is_numeric {
+            let view = graphemes(&data.text).rev().scan(0i16, |w, (g, g_w)| {
+                *w = (*w).wrapping_add(g_w);
+                if *w > data.width { None } else { Some(g) }
+            }).last().map(|x| x.start ..= data.text.len() - 1);
+            data.view = view;
         } else {
-            let end = graphemes(&data.text)
+            let view = graphemes(&data.text)
                 .map(|(g, g_w)| (g.start ..= g.end - 1, g_w))
-                .chain(once((data.text.len() ..= data.text.len(), 1)))
                 .scan(0i16, |w, (g, g_w)| {
                     *w = (*w).wrapping_add(g_w);
                     if *w > data.width { None } else { Some(g) }
                 })
-                .last().map_or(0, |x| *x.end());
-            data.view = 0 ..= end;
+                .last().map(|x| 0 ..= *x.end());
+            data.view = view;
         }
         this.invalidate_render();
     }
@@ -243,29 +247,31 @@ impl InputLine {
             (false, false) => data.color_disabled
         };
         rp.fill_bg(color);
-        let show_text_end = data.view.contains(&data.text.len());
-        let text = if show_text_end {
-            &data.text[*data.view.start() .. *data.view.end()]
-        } else {
-            &data.text[data.view.clone()]
-        };
-        let align = Thickness::align(
-            Vector { x: text_width(text).wrapping_add(if show_text_end { 1 } else { 0 }), y: 1 },
-            Vector { x: data.width, y: 1 },
-            data.text_align,
-            VAlign::Top
-        );
-        let text_start = align.shrink_rect(Thickness::new(1, 0, 1, 0).shrink_rect(bounds)).tl;
-        rp.text(text_start, color, text);
-        if *data.view.start() > 0 {
-            rp.text(Point { x: 0, y: 0 }, color, "◄");
-        }
-        if !show_text_end && *data.view.end() < data.text.len() - 1 {
-            rp.text(bounds.tr_inner(), color, "►");
-        }
-        if is_focused_primary && data.view.contains(&data.cursor) {
-            let cursor_x = text_width(&data.text[*data.view.start() .. data.cursor]);
-            rp.cursor(text_start.offset(Vector { x: cursor_x, y: 0 }));
+        if let Some(view) = data.view.clone() {
+            let show_text_end = view.contains(&data.text.len());
+            let text = if show_text_end {
+                &data.text[*view.start() .. *view.end()]
+            } else {
+                &data.text[view.clone()]
+            };
+            let align = Thickness::align(
+                Vector { x: text_width(text).wrapping_add(if show_text_end { 1 } else { 0 }), y: 1 },
+                Vector { x: data.width, y: 1 },
+                if data.is_numeric { HAlign::Right } else { HAlign::Left },
+                VAlign::Top
+            );
+            let text_start = align.shrink_rect(Thickness::new(1, 0, 1, 0).shrink_rect(bounds)).tl;
+            rp.text(text_start, color, text);
+            if *view.start() > 0 {
+                rp.text(Point { x: 0, y: 0 }, color, "◄");
+            }
+            if !show_text_end && *view.end() < data.text.len() - 1 {
+                rp.text(bounds.tr_inner(), color, "►");
+            }
+            if is_focused_primary && view.contains(&data.cursor) {
+                let cursor_x = text_width(&data.text[*view.start() .. data.cursor]);
+                rp.cursor(text_start.offset(Vector { x: cursor_x, y: 0 }));
+            }
         }
     }
 
@@ -310,7 +316,7 @@ macro_rules! input_line_template {
 
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
-                pub text_align: Option<$crate::base::HAlign>,
+                pub is_numeric: Option<bool>,
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub color: Option<($crate::base::Fg, $crate::base::Bg)>,
@@ -341,7 +347,7 @@ macro_rules! input_line_apply_template {
 
             let obj: $crate::alloc_rc_Rc<dyn $crate::input_line::IsInputLine>
                 = $crate::dynamic_cast_dyn_cast_rc($instance.clone()).unwrap();
-            $this.text_align.map(|x| obj.set_text_align(x));
+            $this.is_numeric.map(|x| obj.set_is_numeric(x));
             $this.color.map(|x| obj.set_color(x));
             $this.color_focused.map(|x| obj.set_color_focused(x));
             $this.color_disabled.map(|x| obj.set_color_disabled(x));
