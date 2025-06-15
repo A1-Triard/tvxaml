@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "editors"
+version = "0.0.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+basic-oop = "0.8.1"
+dynamic-cast = "0.2.0"
+panicking = "0.5.0"
+serde = { version = "1.0.219", default-features = false, features = ["derive", "alloc"] }
+timer-no-std = "0.6.0"
+tvxaml = { version = "0.1.0", path = "../.." }
+tvxaml-screen-ncurses = { version = "0.1.0", path = "../../screen-ncurses" }
+typetag = "0.2.20"

@@ -1,0 +1,27 @@
+warning: unused import: `self`
+ --> src/main.rs:5:15
+  |
+5 | use std::rc::{self, Rc};
+  |               ^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `IsCheckBox`
+ --> src/main.rs:9:25
+  |
+9 | use tvxaml::check_box::{IsCheckBox, CheckBoxExt};
+  |                         ^^^^^^^^^^
+
+warning: unused import: `CheckBoxExt`
+ --> src/main.rs:9:37
+  |
+9 | use tvxaml::check_box::{IsCheckBox, CheckBoxExt};
+  |                                     ^^^^^^^^^^^
+
+warning: `editors` (bin "editors") generated 3 warnings (run `cargo fix --bin "editors"` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/editors`
+
+thread 'main' panicked at /home/master/git/tvxaml/src/input_line.rs:262:23:
+byte index 1 is out of bounds of ``
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

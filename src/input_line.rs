@@ -2,7 +2,8 @@ use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
 use std::mem::replace;
-use std::ops::Range;
+use std::iter::once;
+use std::ops::RangeInclusive;
 use std::rc::{self};
 use crate::base::{text_width, VAlign, graphemes};
 use crate::event_handler::EventHandler;
@@ -18,7 +19,7 @@ struct InputLineData {
     color: (Fg, Bg),
     color_focused: (Fg, Bg),
     color_disabled: (Fg, Bg),
-    view: Range<usize>,
+    view: RangeInclusive<usize>,
     cursor: usize,
     width: i16,
     text_align: HAlign,
@@ -114,7 +115,7 @@ impl InputLine {
                 color_disabled: (Fg::DarkGray, Bg::Blue),
                 text_change_handler: Default::default(),
                 cursor: 0,
-                view: 0 .. 0,
+                view: 0 ..= 0,
                 text_align: HAlign::Left,
                 width: 0,
             }),
@@ -208,17 +209,22 @@ impl InputLine {
         let is_focused = this.is_focused(None);
         let mut data = this.input_line().data.borrow_mut();
         data.cursor = data.text.len();
-        data.view = 0 .. data.text.len();
         if is_focused {
-            data.view.start = graphemes(&data.text).rev().scan(0i16, |w, (g, g_w)| {
+            let start = graphemes(&data.text).rev().scan(1i16, |w, (g, g_w)| {
                 *w = (*w).wrapping_add(g_w);
                 if *w > data.width { None } else { Some(g) }
             }).last().map_or(data.text.len(), |x| x.start);
+            data.view = start ..= data.text.len();
         } else {
-            data.view.end = graphemes(&data.text).scan(0i16, |w, (g, g_w)| {
-                *w = (*w).wrapping_add(g_w);
-                if *w > data.width { None } else { Some(g) }
-            }).last().map_or(0, |x| x.end);
+            let end = graphemes(&data.text)
+                .map(|(g, g_w)| (g.start ..= g.end - 1, g_w))
+                .chain(once((data.text.len() ..= data.text.len(), 1)))
+                .scan(0i16, |w, (g, g_w)| {
+                    *w = (*w).wrapping_add(g_w);
+                    if *w > data.width { None } else { Some(g) }
+                })
+                .last().map_or(0, |x| *x.end());
+            data.view = 0 ..= end;
         }
         this.invalidate_render();
     }
@@ -237,26 +243,28 @@ impl InputLine {
             (false, false) => data.color_disabled
         };
         rp.fill_bg(color);
+        let show_text_end = data.view.contains(&data.text.len());
+        let text = if show_text_end {
+            &data.text[*data.view.start() .. *data.view.end()]
+        } else {
+            &data.text[data.view.clone()]
+        };
         let align = Thickness::align(
-            Vector { x: text_width(&data.text[data.view.clone()]), y: 1 },
-            Thickness::new(1, 0, 1, 0).shrink_rect_size(Vector { x: data.width, y: 1 }),
+            Vector { x: text_width(text).wrapping_add(if show_text_end { 1 } else { 0 }), y: 1 },
+            Vector { x: data.width, y: 1 },
             data.text_align,
             VAlign::Top
         );
         let text_start = align.shrink_rect(Thickness::new(1, 0, 1, 0).shrink_rect(bounds)).tl;
-        rp.text(
-            text_start,
-            color,
-            &data.text[data.view.clone()]
-        );
-        if data.view.start > 0 {
+        rp.text(text_start, color, text);
+        if *data.view.start() > 0 {
             rp.text(Point { x: 0, y: 0 }, color, "◄");
         }
-        if data.view.end < data.text.len() {
+        if !show_text_end && *data.view.end() < data.text.len() - 1 {
             rp.text(bounds.tr_inner(), color, "►");
         }
         if is_focused_primary && data.view.contains(&data.cursor) {
-            let cursor_x = text_width(&data.text[data.view.start .. data.cursor]);
+            let cursor_x = text_width(&data.text[*data.view.start() .. data.cursor]);
             rp.cursor(text_start.offset(Vector { x: cursor_x, y: 0 }));
         }
     }

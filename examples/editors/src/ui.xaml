@@ -1,0 +1,8 @@
+<Background xmlns='https://a1-triard.github.io/tvxaml/2025/xaml'>
+  <GroupBox HAlign="Center" VAlign="Center" HeaderAlign="Center" HeaderText="Editors">
+    <StackPanel Margin="1,0,1,0" Width="20">
+      <InputLine Name="edit1" />
+      <InputLine Name="edit2" Margin="0,1,0,0" TextAlign="Right" />
+    </StackPanel>
+  </GroupBox>
+</Background>

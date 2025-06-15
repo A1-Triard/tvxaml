@@ -71,16 +71,22 @@ pub fn is_text_fit_in(w: i16, s: &str) -> bool {
 }
 
 pub fn graphemes(text: &str) -> Graphemes {
-    Graphemes(text)
+    Graphemes {
+        s: text,
+        range: 0 .. text.len(),
+    }
 }
 
-pub struct Graphemes<'a>(&'a str);
+pub struct Graphemes<'a> {
+    s: &'a str,
+    range: Range<usize>,
+}
 
 impl<'a> Iterator for Graphemes<'a> {
     type Item = (Range<usize>, i16);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut chars = self.0.char_indices();
+        let mut chars = self.s[self.range.clone()].char_indices();
         let (start, w) = loop {
             let Some(c) = chars.next() else { return None; };
             if c.1 == '\0' { continue; }
@@ -96,20 +102,19 @@ impl<'a> Iterator for Graphemes<'a> {
             if w != 0 { break; }
             end = c;
         }
-        let end = end.0 + end.1.len_utf8();
-        let item = (start.0 .. end, w);
-        self.0 = &self.0[end ..];
+        let item = (self.range.start + start.0 .. self.range.start + end.0 + end.1.len_utf8(), w);
+        self.range = item.0.end .. self.range.end;
         Some(item)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.0.len()))
+        (0, Some(self.range.len()))
     }
 }
 
 impl<'a> DoubleEndedIterator for Graphemes<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        let mut chars = self.0.char_indices();
+        let mut chars = self.s[self.range.clone()].char_indices();
         'end: loop {
             let Some(c) = chars.next_back() else { return None; };
             if c.1 == '\0' { continue; }
@@ -122,8 +127,8 @@ impl<'a> DoubleEndedIterator for Graphemes<'a> {
                 let Some(w) = c.1.width() else { continue 'end; };
                 start = (c, i16::try_from(w).unwrap());
             }
-            let item = (start.0.0 .. end.0 + end.1.len_utf8(), start.1);
-            self.0 = &self.0[.. start.0.0];
+            let item = (self.range.start + start.0.0 .. self.range.start + end.0 + end.1.len_utf8(), start.1);
+            self.range = self.range.start .. item.0.start;
             break Some(item);
         }
     }
