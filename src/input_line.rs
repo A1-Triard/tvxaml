@@ -332,12 +332,20 @@ impl InputLine {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
                 let view_end = {
                     let mut data = this.input_line().data.borrow_mut();
-                    if let Some((g, _)) = graphemes(&data.text[data.cursor ..]).next() {
-                        data.cursor += g.end;
+                    let mut graphemes = graphemes(&data.text[data.cursor ..]);
+                    if graphemes.next().is_some() {
+                        let cursor_end = if let Some((g, _)) = graphemes.next() {
+                            let cursor_end = data.cursor + g.end;
+                            data.cursor += g.start;
+                            cursor_end
+                        } else {
+                            data.cursor = data.text.len();
+                            data.text.len()
+                        };
                         if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
                             Some(None)
                         } else {
-                            Some(Some(data.cursor))
+                            Some(Some(cursor_end))
                         }
                     } else {
                         None
@@ -364,6 +372,28 @@ impl InputLine {
                     data.text.len()
                 };
                 Self::calc_view_start(&this, text_len);
+                this.invalidate_render();
+                return true;
+            },
+            Key::Char(c) => {
+                let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+                let view_end = {
+                    let mut data = this.input_line().data.borrow_mut();
+                    let cursor = data.cursor;
+                    data.text.insert(cursor, c);
+                    data.cursor += c.len_utf8();
+                    if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
+                        None
+                    } else {
+                        let cursor_end = data.cursor
+                            + graphemes(&data.text[data.cursor ..]).next().map_or(0, |(g, _)| g.end - 1);
+                        Some(cursor_end)
+                    }
+                };
+                if let Some(view_end) = view_end {
+                    Self::calc_view_start(&this, view_end);
+                }
+                this.text_changed();
                 this.invalidate_render();
                 return true;
             },
