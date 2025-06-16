@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ops::RangeInclusive;
 use std::rc::{self};
-use crate::base::{text_width, VAlign, graphemes, HAlign};
+use crate::base::{text_width, VAlign, graphemes, HAlign, char_width};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 
@@ -20,6 +20,7 @@ struct InputLineData {
     color_disabled: (Fg, Bg),
     view: Option<RangeInclusive<usize>>,
     cursor: usize,
+    delete_char: bool,
     width: i16,
     is_numeric: bool,
     text_change_handler: EventHandler<Option<Box<dyn FnMut()>>>,
@@ -117,6 +118,7 @@ impl InputLine {
                 text_change_handler: Default::default(),
                 cursor: 0,
                 view: None,
+                delete_char: false,
                 is_numeric: false,
                 width: 0,
             }),
@@ -210,19 +212,32 @@ impl InputLine {
         let is_focused = this.is_focused(None);
         let (is_numeric, text_len) = {
             let mut data = this.input_line().data.borrow_mut();
+            data.delete_char = false;
             data.cursor = data.text.len();
             (data.is_numeric, data.text.len())
         };
         if is_focused {
             Self::calc_view_start(this, text_len);
         } else if is_numeric {
-            if text_len == 0 {
-                this.input_line().data.borrow_mut().view = None;
+            let view_end = {
+                let data = this.input_line().data.borrow();
+                graphemes(&data.text).next_back().map(|(g, _)| g.end - 1)
+            };
+            if let Some(view_end) = view_end {
+                Self::calc_view_start(this, view_end);
             } else {
-                Self::calc_view_start(this, text_len - 1);
+                this.input_line().data.borrow_mut().view = None;
             }
         } else {
-            Self::calc_view_end(this, 0);
+            let view_start = {
+                let data = this.input_line().data.borrow();
+                graphemes(&data.text).next().map(|(g, _)| g.start)
+            };
+            if let Some(view_start) = view_start {
+                Self::calc_view_end(this, view_start);
+            } else {
+                this.input_line().data.borrow_mut().view = None;
+            }
         }
         this.invalidate_render();
     }
@@ -312,6 +327,7 @@ impl InputLine {
                 let view_start = {
                     let mut data = this.input_line().data.borrow_mut();
                     if let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() {
+                        data.delete_char = false;
                         data.cursor = g.start;
                         if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
                             Some(None)
@@ -342,6 +358,7 @@ impl InputLine {
                             data.cursor = data.text.len();
                             data.text.len()
                         };
+                        data.delete_char = false;
                         if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
                             Some(None)
                         } else {
@@ -359,8 +376,17 @@ impl InputLine {
             }, 
             Key::Home => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                this.input_line().data.borrow_mut().cursor = 0;
-                Self::calc_view_end(&this, 0);
+                let view_start = {
+                    let mut data = this.input_line().data.borrow_mut();
+                    data.delete_char = false;
+                    data.cursor = 0;
+                    graphemes(&data.text).next().map(|(g, _)| g.start)
+                };
+                if let Some(view_start) = view_start {
+                    Self::calc_view_end(&this, view_start);
+                } else {
+                    this.input_line().data.borrow_mut().view = None;
+                }
                 this.invalidate_render();
                 return true;
             },
@@ -368,6 +394,7 @@ impl InputLine {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
                 let text_len = {
                     let mut data = this.input_line().data.borrow_mut();
+                    data.delete_char = false;
                     data.cursor = data.text.len();
                     data.text.len()
                 };
@@ -379,6 +406,7 @@ impl InputLine {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
                 let view_end = {
                     let mut data = this.input_line().data.borrow_mut();
+                    data.delete_char = true;
                     let cursor = data.cursor;
                     data.text.insert(cursor, c);
                     data.cursor += c.len_utf8();
@@ -395,6 +423,48 @@ impl InputLine {
                 }
                 this.text_changed();
                 this.invalidate_render();
+                return true;
+            },
+            Key::Backspace => {
+                let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
+                let view_start = {
+                    let mut data = this.input_line().data.borrow_mut();
+                    let delete = if data.delete_char {
+                        if let Some(c) = data.text[.. data.cursor].chars().next_back() {
+                            data.cursor -= c.len_utf8();
+                            let cursor = data.cursor;
+                            data.text.remove(cursor);
+                            if char_width(c) != 0 {
+                                data.delete_char = false;
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        if let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() {
+                            let cursor = data.cursor;
+                            data.text.replace_range(g.start .. cursor, "");
+                            data.cursor = g.start;
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if delete {
+                        if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
+                            Some(None)
+                        } else {
+                            Some(Some(data.cursor))
+                        }
+                    } else {
+                        None
+                    }
+                };
+                if let Some(view_start) = view_start {
+                    view_start.map(|x| Self::calc_view_end(&this, x));
+                    this.invalidate_render();
+                } 
                 return true;
             },
             _ => { },
