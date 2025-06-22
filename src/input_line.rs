@@ -4,7 +4,8 @@ use std::cell::RefCell;
 use std::mem::replace;
 use std::ops::RangeInclusive;
 use std::rc::{self};
-use crate::base::{text_width, VAlign, graphemes, HAlign, char_width};
+use unicode_width::UnicodeWidthChar;
+use crate::base::{text_width, VAlign, graphemes, HAlign, char_width, is_text_fit_in};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 
@@ -18,7 +19,7 @@ struct InputLineData {
     color: (Fg, Bg),
     color_focused: (Fg, Bg),
     color_disabled: (Fg, Bg),
-    view: Option<RangeInclusive<usize>>,
+    view: Option<(RangeInclusive<usize>, HAlign)>,
     cursor: usize,
     delete_char: bool,
     width: i16,
@@ -253,7 +254,7 @@ impl InputLine {
                 if *w > data.width { None } else { Some(g) }
             })
             .last().map(|x| x.start ..= view_end);
-        data.view = view;
+        data.view = view.map(|x| (x, HAlign::Right));
     }
 
     fn calc_view_end(this: &Rc<dyn IsInputLine>, view_start: usize) {
@@ -265,7 +266,7 @@ impl InputLine {
                 if *w > data.width { None } else { Some(g) }
             })
             .last().map(|x| view_start ..= view_start + *x.end());
-        data.view = view;
+        data.view = view.map(|x| (x, HAlign::Left));
     }
 
     pub fn render_impl(this: &Rc<dyn IsView>, rp: &mut RenderPort) {
@@ -282,7 +283,7 @@ impl InputLine {
             (false, false) => data.color_disabled
         };
         rp.fill_bg(color);
-        if let Some(view) = data.view.clone() {
+        if let Some((view, align)) = data.view.clone() {
             let show_text_end = view.contains(&data.text.len());
             let text = if show_text_end {
                 &data.text[*view.start() .. *view.end()]
@@ -292,15 +293,15 @@ impl InputLine {
             let align = Thickness::align(
                 Vector { x: text_width(text).wrapping_add(if show_text_end { 1 } else { 0 }), y: 1 },
                 Vector { x: data.width, y: 1 },
-                if data.is_numeric { HAlign::Right } else { HAlign::Left },
+                align,
                 VAlign::Top
             );
             let text_start = align.shrink_rect(Thickness::new(1, 0, 1, 0).shrink_rect(bounds)).tl;
             rp.text(text_start, color, text);
-            if *view.start() > 0 {
+            if graphemes(&data.text[.. *view.start()]).next_back().is_some() {
                 rp.text(Point { x: 0, y: 0 }, color, "◄");
             }
-            if !show_text_end && *view.end() < data.text.len() - 1 {
+            if !show_text_end && graphemes(&data.text[*view.end() + 1 .. ]).next().is_some() {
                 rp.text(bounds.tr_inner(), color, "►");
             }
             if is_focused_primary && view.contains(&data.cursor) {
@@ -320,151 +321,193 @@ impl InputLine {
         this.input_line().data.borrow_mut().text_change_handler.set(handler);
     }
 
+    fn cursor_left(this: &Rc<dyn IsInputLine>) -> bool {
+        let view_start = {
+            let mut data = this.input_line().data.borrow_mut();
+            let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() else { return false; };
+            data.delete_char = false;
+            data.cursor = g.start;
+            if let Some((view, _)) = data.view.clone() && view.contains(&data.cursor) {
+                None
+            } else {
+                Some(data.cursor)
+            }
+        };
+        view_start.map(|x| Self::calc_view_end(this, x));
+        this.invalidate_render();
+        true
+    }
+
+    fn cursor_right(this: &Rc<dyn IsInputLine>) -> bool {
+        let view_end = {
+            let mut data = this.input_line().data.borrow_mut();
+            let mut graphemes = graphemes(&data.text[data.cursor ..]);
+            if graphemes.next().is_none() { return false; }
+            let cursor_end = if let Some((g, _)) = graphemes.next() {
+                let cursor_end = data.cursor + g.end - 1;
+                data.cursor += g.start;
+                cursor_end
+            } else {
+                data.cursor = data.text.len();
+                data.text.len()
+            };
+            data.delete_char = false;
+            if let Some((view, _)) = data.view.clone() && view.contains(&data.cursor) {
+                None
+            } else {
+                Some(cursor_end)
+            }
+        };
+        view_end.map(|x| Self::calc_view_start(this, x));
+        this.invalidate_render();
+        true
+    }
+
+    fn cursor_home(this: &Rc<dyn IsInputLine>) {
+        let view_start = {
+            let mut data = this.input_line().data.borrow_mut();
+            data.delete_char = false;
+            let view_start = graphemes(&data.text).next().map(|(g, _)| g.start);
+            data.cursor = view_start.unwrap_or(0);
+            view_start
+        };
+        if let Some(view_start) = view_start {
+            Self::calc_view_end(this, view_start);
+        } else {
+            this.input_line().data.borrow_mut().view = None;
+        }
+        this.invalidate_render();
+    }
+
+    fn cursor_end(this: &Rc<dyn IsInputLine>) {
+        let text_len = {
+            let mut data = this.input_line().data.borrow_mut();
+            data.delete_char = false;
+            data.cursor = data.text.len();
+            data.text.len()
+        };
+        Self::calc_view_start(this, text_len);
+        this.invalidate_render();
+    }
+
+    fn type_char(this: &Rc<dyn IsInputLine>, c: char) {
+        if c == '\0' { return; }
+        let Some(c_w) = c.width() else { return; };
+        let view_start = {
+            let mut data = this.input_line().data.borrow_mut();
+            let prev_gr = if c_w == 0 {
+                let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() else { return; };
+                Some(g)
+            } else {
+                None
+            };
+            data.delete_char = true;
+            let cursor = data.cursor;
+            data.text.insert(cursor, c);
+            data.cursor += c.len_utf8();
+            if let Some((view, _)) = data.view.clone() && *view.start() < cursor {
+                *view.start()
+            } else {
+                if let Some(prev_gr) = prev_gr {
+                    prev_gr.start
+                } else {
+                    cursor
+                }
+            }
+        };
+        Self::calc_view_end(this, view_start);
+        let view_end = {
+            let data = this.input_line().data.borrow();
+            if let Some((view, _)) = data.view.clone() && view.contains(&data.cursor) {
+                None
+            } else {
+                let cursor_end = data.cursor
+                    + graphemes(&data.text[data.cursor ..]).next().map_or(0, |(g, _)| g.end - 1);
+                Some(cursor_end)
+            }
+        };
+        if let Some(view_end) = view_end {
+            Self::calc_view_start(this, view_end);
+        }
+        this.text_changed();
+        this.invalidate_render();
+    }
+
+    fn delete_before_cursor(this: &Rc<dyn IsInputLine>) {
+        let view_start = {
+            let mut data = this.input_line().data.borrow_mut();
+            if data.delete_char {
+                let c = data.text[.. data.cursor].chars().next_back().unwrap();
+                data.cursor -= c.len_utf8();
+                let cursor = data.cursor;
+                data.text.remove(cursor);
+                if char_width(c) != 0 {
+                    data.delete_char = false;
+                }
+            } else {
+                let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() else { return; };
+                let cursor = data.cursor;
+                data.text.replace_range(g.start .. cursor, "");
+                data.cursor = g.start;
+            };
+            if let Some((view, _)) = data.view.clone() && *view.start() <= data.cursor {
+                *view.start()
+            } else {
+                data.cursor
+            }
+        };
+        Self::calc_view_end(this, view_start);
+        let view_end = {
+            let data = this.input_line().data.borrow();
+            if let Some((view, _)) = data.view.clone() {
+                let with_end = view.contains(&data.text.len());
+                if with_end {
+                    let text = &data.text[*view.start() .. *view.end()];
+                    let text_width = text_width(text).wrapping_add(1);
+                    if text_width < data.width {
+                        Some(data.text.len())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        view_end.map(|x| Self::calc_view_start(this, x));
+        this.invalidate_render();
+    }
+
     pub fn key_impl(this: &Rc<dyn IsView>, key: Key, original_source: &Rc<dyn IsView>) -> bool {
         match key {
             Key::Left => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                let view_start = {
-                    let mut data = this.input_line().data.borrow_mut();
-                    if let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() {
-                        data.delete_char = false;
-                        data.cursor = g.start;
-                        if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
-                            Some(None)
-                        } else {
-                            Some(Some(data.cursor))
-                        }
-                    } else {
-                        None
-                    }
-                };
-                if let Some(view_start) = view_start {
-                    view_start.map(|x| Self::calc_view_end(&this, x));
-                    this.invalidate_render();
-                    return true;
-                } 
+                if Self::cursor_left(&this) { return true; }
             },
             Key::Right => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                let view_end = {
-                    let mut data = this.input_line().data.borrow_mut();
-                    let mut graphemes = graphemes(&data.text[data.cursor ..]);
-                    if graphemes.next().is_some() {
-                        let cursor_end = if let Some((g, _)) = graphemes.next() {
-                            let cursor_end = data.cursor + g.end;
-                            data.cursor += g.start;
-                            cursor_end
-                        } else {
-                            data.cursor = data.text.len();
-                            data.text.len()
-                        };
-                        data.delete_char = false;
-                        if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
-                            Some(None)
-                        } else {
-                            Some(Some(cursor_end))
-                        }
-                    } else {
-                        None
-                    }
-                };
-                if let Some(view_end) = view_end {
-                    view_end.map(|x| Self::calc_view_start(&this, x));
-                    this.invalidate_render();
-                    return true;
-                } 
+                if Self::cursor_right(&this) { return true; }
             }, 
             Key::Home => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                let view_start = {
-                    let mut data = this.input_line().data.borrow_mut();
-                    data.delete_char = false;
-                    data.cursor = 0;
-                    graphemes(&data.text).next().map(|(g, _)| g.start)
-                };
-                if let Some(view_start) = view_start {
-                    Self::calc_view_end(&this, view_start);
-                } else {
-                    this.input_line().data.borrow_mut().view = None;
-                }
-                this.invalidate_render();
+                Self::cursor_home(&this);
                 return true;
             },
             Key::End => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                let text_len = {
-                    let mut data = this.input_line().data.borrow_mut();
-                    data.delete_char = false;
-                    data.cursor = data.text.len();
-                    data.text.len()
-                };
-                Self::calc_view_start(&this, text_len);
-                this.invalidate_render();
+                Self::cursor_end(&this);
                 return true;
             },
             Key::Char(c) => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                let view_end = {
-                    let mut data = this.input_line().data.borrow_mut();
-                    data.delete_char = true;
-                    let cursor = data.cursor;
-                    data.text.insert(cursor, c);
-                    data.cursor += c.len_utf8();
-                    if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
-                        None
-                    } else {
-                        let cursor_end = data.cursor
-                            + graphemes(&data.text[data.cursor ..]).next().map_or(0, |(g, _)| g.end - 1);
-                        Some(cursor_end)
-                    }
-                };
-                if let Some(view_end) = view_end {
-                    Self::calc_view_start(&this, view_end);
-                }
-                this.text_changed();
-                this.invalidate_render();
+                Self::type_char(&this, c);
                 return true;
             },
             Key::Backspace => {
                 let this: Rc<dyn IsInputLine> = dyn_cast_rc(this.clone()).unwrap();
-                let view_start = {
-                    let mut data = this.input_line().data.borrow_mut();
-                    let delete = if data.delete_char {
-                        if let Some(c) = data.text[.. data.cursor].chars().next_back() {
-                            data.cursor -= c.len_utf8();
-                            let cursor = data.cursor;
-                            data.text.remove(cursor);
-                            if char_width(c) != 0 {
-                                data.delete_char = false;
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    } else {
-                        if let Some((g, _)) = graphemes(&data.text[.. data.cursor]).next_back() {
-                            let cursor = data.cursor;
-                            data.text.replace_range(g.start .. cursor, "");
-                            data.cursor = g.start;
-                            true
-                        } else {
-                            false
-                        }
-                    };
-                    if delete {
-                        if let Some(view) = data.view.clone() && view.contains(&data.cursor) {
-                            Some(None)
-                        } else {
-                            Some(Some(data.cursor))
-                        }
-                    } else {
-                        None
-                    }
-                };
-                if let Some(view_start) = view_start {
-                    view_start.map(|x| Self::calc_view_end(&this, x));
-                    this.invalidate_render();
-                } 
+                Self::delete_before_cursor(&this);
                 return true;
             },
             _ => { },
