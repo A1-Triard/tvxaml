@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use std::mem::replace;
 use std::ptr::addr_eq;
 use crate::base::{option_addr_eq, TextWrapping};
 use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
@@ -15,6 +16,8 @@ struct ContentControlData {
     content: Option<Rc<dyn IsView>>,
     text: Rc<String>,
     text_color: (Fg, Bg),
+    content_template: Option<Rc<dyn Template>>,
+    loaded_content_template: Option<Rc<dyn IsView>>,
 }
 
 #[class_unsafe(inherits_Control)]
@@ -32,6 +35,10 @@ pub struct ContentControl {
     text_color: fn() -> (Fg, Bg),
     #[non_virt]
     set_text_color: fn(value: (Fg, Bg)),
+    #[non_virt]
+    content_template: fn() -> Option<Rc<dyn Template>>,
+    #[non_virt]
+    set_content_template: fn(value: Option<Rc<dyn Template>>),
     #[over]
     template: (),
     #[over]
@@ -53,6 +60,8 @@ impl ContentControl {
                 content: None,
                 text: Rc::new(String::new()),
                 text_color: (Fg::LightGray, Bg::None),
+                content_template: None,
+                loaded_content_template: None,
             }),
         }
     }
@@ -63,13 +72,29 @@ impl ContentControl {
             = dyn_cast_rc(
                 template.find("PART_ContentPresenter").expect("PART_ContentPresenter").clone()
             ).expect("PART_ContentPresenter: ContentPresenter");
-        let (content, text, text_color) = {
-            let data = this.content_control().data.borrow();
-            (data.content.clone(), data.text.clone(), data.text_color)
+        let (content, text, text_color, old_loaded_content_template, new_loaded_content_template) = {
+            let mut data = this.content_control().data.borrow_mut();
+            let new_loaded_content_template: Option<Rc<dyn IsView>>
+                = data.content_template.as_ref().map(|x| dyn_cast_rc(x.load_root().0).expect("View"));
+            let old_loaded_content_template
+                = replace(&mut data.loaded_content_template, new_loaded_content_template.clone());
+            (
+                data.content.clone(),
+                data.text.clone(),
+                data.text_color,
+                old_loaded_content_template,
+                new_loaded_content_template
+            )
         };
+        if let Some(old_loaded_content_template) = old_loaded_content_template {
+            this._raise_unbind(&old_loaded_content_template, 0);
+        }
         part_content_presenter.set_text(text);
         part_content_presenter.set_text_color(text_color);
-        part_content_presenter.set_content(content);
+        part_content_presenter.set_content(new_loaded_content_template.clone().or(content));
+        if let Some(new_loaded_content_template) = new_loaded_content_template {
+            this._raise_bind(&new_loaded_content_template, 0);
+        }
     }
 
     pub fn content_impl(this: &Rc<dyn IsContentControl>) -> Option<Rc<dyn IsView>> {
@@ -110,6 +135,21 @@ impl ContentControl {
             if data.text_color == value { return; }
             data.text_color = value;
         };
+        this.update();
+    }
+
+    pub fn content_template_impl(this: &Rc<dyn IsContentControl>) -> Option<Rc<dyn Template>> {
+        this.content_control().data.borrow().content_template.clone()
+    }
+
+    pub fn set_content_template_impl(this: &Rc<dyn IsContentControl>, value: Option<Rc<dyn Template>>) {
+        {
+            let mut data = this.content_control().data.borrow_mut();
+            if option_addr_eq(data.content_template.as_ref().map(Rc::as_ptr), value.as_ref().map(Rc::as_ptr)) {
+                return;
+            }
+            data.content_template = value;
+        }
         this.update();
     }
 
