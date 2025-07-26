@@ -1,6 +1,7 @@
 use basic_oop::{class_unsafe, import, Vtable};
 use dynamic_cast::dyn_cast_rc;
 use std::cell::RefCell;
+use std::mem::replace;
 use std::ptr::addr_eq;
 use crate::base::{option_addr_eq, TextWrapping};
 use crate::content_presenter::{IsContentPresenter, ContentPresenterExt, ContentPresenterTemplate};
@@ -14,6 +15,8 @@ import! { pub headered_content_control:
 struct HeaderedContentControlData {
     header: Option<Rc<dyn IsView>>,
     header_text: Rc<String>,
+    header_template: Option<Rc<dyn Template>>,
+    loaded_header_template: Option<Rc<dyn IsView>>,
 }
 
 #[class_unsafe(inherits_ContentControl)]
@@ -27,6 +30,10 @@ pub struct HeaderedContentControl {
     header_text: fn() -> Rc<String>,
     #[non_virt]
     set_header_text: fn(value: Rc<String>),
+    #[non_virt]
+    header_template: fn() -> Option<Rc<dyn Template>>,
+    #[non_virt]
+    set_header_template: fn(value: Option<Rc<dyn Template>>),
     #[over]
     template: (),
     #[over]
@@ -47,6 +54,8 @@ impl HeaderedContentControl {
             data: RefCell::new(HeaderedContentControlData {
                 header: None,
                 header_text: Rc::new(String::new()),
+                header_template: None,
+                loaded_header_template: None,
             }),
         }
     }
@@ -73,6 +82,21 @@ impl HeaderedContentControl {
             let mut data = this.headered_content_control().data.borrow_mut();
             if addr_eq(Rc::as_ptr(&data.header_text), Rc::as_ptr(&value)) { return; }
             data.header_text = value;
+        }
+        this.update();
+    }
+
+    pub fn header_template_impl(this: &Rc<dyn IsHeaderedContentControl>) -> Option<Rc<dyn Template>> {
+        this.headered_content_control().data.borrow().header_template.clone()
+    }
+
+    pub fn set_header_template_impl(this: &Rc<dyn IsHeaderedContentControl>, value: Option<Rc<dyn Template>>) {
+        {
+            let mut data = this.headered_content_control().data.borrow_mut();
+            if option_addr_eq(data.header_template.as_ref().map(Rc::as_ptr), value.as_ref().map(Rc::as_ptr)) {
+                return;
+            }
+            data.header_template = value;
         }
         this.update();
     }
@@ -105,12 +129,27 @@ impl HeaderedContentControl {
             = dyn_cast_rc(
                 template.find("PART_HeaderPresenter").expect("PART_HeaderPresenter").clone()
             ).expect("PART_HeaderPresenter: ContentPresenter");
-        let (header, text) = {
-            let data = this.headered_content_control().data.borrow();
-            (data.header.clone(), data.header_text.clone())
+        let (header, text, old_loaded_header_template, new_loaded_header_template) = {
+            let mut data = this.headered_content_control().data.borrow_mut();
+            let new_loaded_header_template: Option<Rc<dyn IsView>>
+                = data.header_template.as_ref().map(|x| dyn_cast_rc(x.load_root().0).expect("View"));
+            let old_loaded_header_template
+                = replace(&mut data.loaded_header_template, new_loaded_header_template.clone());
+            (
+                data.header.clone(),
+                data.header_text.clone(),
+                old_loaded_header_template,
+                new_loaded_header_template,
+            )
         };
-        part_header_presenter.set_content(header);
+        if let Some(old_loaded_header_template) = old_loaded_header_template {
+            this._raise_unbind(&old_loaded_header_template, 1);
+        }
+        part_header_presenter.set_content(new_loaded_header_template.clone().or(header));
         part_header_presenter.set_text(text);
+        if let Some(new_loaded_header_template) = new_loaded_header_template {
+            this._raise_bind(&new_loaded_header_template, 1);
+        }
     }
 }
 
