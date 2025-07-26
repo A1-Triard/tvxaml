@@ -6,7 +6,7 @@ use std::mem::replace;
 use std::ops::{Range, RangeInclusive};
 use std::rc::{self};
 use unicode_width::UnicodeWidthChar;
-use crate::base::{text_width, VAlign, graphemes, HAlign, char_width, is_text_fit_in};
+use crate::base::{text_width, VAlign, graphemes, HAlign, char_width};
 use crate::event_handler::EventHandler;
 use crate::template::{Template, NameResolver};
 

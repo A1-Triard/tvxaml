@@ -419,6 +419,8 @@ struct ViewData {
     secondary_focus_root: rc::Weak<dyn IsView>,
     visibility: Visibility,
     tab_index: i8,
+    bind_handler: EventHandler<Option<Box<dyn FnMut(&Rc<dyn IsView>, usize, &Rc<dyn IsView>) -> bool>>>,
+    unbind_handler: EventHandler<Option<Box<dyn FnMut(&Rc<dyn IsView>, usize, &Rc<dyn IsView>) -> bool>>>,
 }
 
 #[class_unsafe(inherits_Obj)]
@@ -560,6 +562,18 @@ pub struct View {
     secondary_focus_keys: fn() -> SecondaryFocusKeys,
     #[non_virt]
     set_secondary_focus_keys: fn(value: SecondaryFocusKeys),
+    #[non_virt]
+    handle_bind: fn(handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, usize, &Rc<dyn IsView>) -> bool>>),
+    #[non_virt]
+    handle_unbind: fn(handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, usize, &Rc<dyn IsView>) -> bool>>),
+    #[virt]
+    bind: fn(item: &Rc<dyn IsView>, index: usize, original_source: &Rc<dyn IsView>) -> bool,
+    #[virt]
+    unbind: fn(item: &Rc<dyn IsView>, index: usize, original_source: &Rc<dyn IsView>) -> bool,
+    #[non_virt]
+    _raise_bind: fn(item: &Rc<dyn IsView>, index: usize),
+    #[non_virt]
+    _raise_unbind: fn(item: &Rc<dyn IsView>, index: usize),
 }
 
 impl View {
@@ -603,6 +617,8 @@ impl View {
                 secondary_focus_root: <rc::Weak::<View>>::new(),
                 visibility: Visibility::Visible,
                 tab_index: i8::MAX,
+                bind_handler: Default::default(),
+                unbind_handler: Default::default(),
             })
         }
     }
@@ -1206,6 +1222,52 @@ impl View {
         handler: Option<Box<dyn FnMut(Key, &Rc<dyn IsView>) -> bool>>
     ) {
         this.view().data.borrow_mut().key_handler.set(handler);
+    }
+
+    pub fn handle_bind_impl(
+        this: &Rc<dyn IsView>,
+        handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, usize, &Rc<dyn IsView>) -> bool>>
+    ) {
+        this.view().data.borrow_mut().bind_handler.set(handler);
+    }
+
+    pub fn handle_unbind_impl(
+        this: &Rc<dyn IsView>,
+        handler: Option<Box<dyn FnMut(&Rc<dyn IsView>, usize, &Rc<dyn IsView>) -> bool>>
+    ) {
+        this.view().data.borrow_mut().unbind_handler.set(handler);
+    }
+
+    pub fn bind_impl(
+        this: &Rc<dyn IsView>,
+        item: &Rc<dyn IsView>,
+        index: usize,
+        original_source: &Rc<dyn IsView>
+    ) -> bool {
+        let mut invoke = this.view().data.borrow_mut().bind_handler.begin_invoke();
+        let handled = invoke.as_mut().map_or(false, |x| x(item, index, original_source));
+        this.view().data.borrow_mut().bind_handler.end_invoke(invoke);
+        handled
+    }
+
+    pub fn unbind_impl(
+        this: &Rc<dyn IsView>,
+        item: &Rc<dyn IsView>,
+        index: usize,
+        original_source: &Rc<dyn IsView>
+    ) -> bool {
+        let mut invoke = this.view().data.borrow_mut().bind_handler.begin_invoke();
+        let handled = invoke.as_mut().map_or(false, |x| x(item, index, original_source));
+        this.view().data.borrow_mut().bind_handler.end_invoke(invoke);
+        handled
+    }
+
+    pub fn _raise_bind_impl(this: &Rc<dyn IsView>, item: &Rc<dyn IsView>, index: usize) {
+        Self::raise(this, |x| x.bind(item, index, this));
+    }
+
+    pub fn _raise_unbind_impl(this: &Rc<dyn IsView>, item: &Rc<dyn IsView>, index: usize) {
+        Self::raise(this, |x| x.unbind(item, index, this));
     }
 
     pub fn secondary_focus_keys_impl(this: &Rc<dyn IsView>) -> SecondaryFocusKeys {
