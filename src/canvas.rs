@@ -86,7 +86,7 @@ macro_rules! canvas_layout_apply_template {
 }
 
 canvas_layout_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="CanvasLayout@Tl")]
     pub struct CanvasLayoutTemplate in canvas_layout_template { }
 }
@@ -187,7 +187,7 @@ macro_rules! canvas_apply_template {
 }
 
 canvas_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Canvas@Children")]
     pub struct CanvasTemplate in canvas_template { }
 }

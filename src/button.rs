@@ -396,7 +396,7 @@ macro_rules! button_apply_template {
 }
 
 button_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Button@Text")]
     pub struct ButtonTemplate in template { }
 }

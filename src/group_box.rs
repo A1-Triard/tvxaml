@@ -206,7 +206,7 @@ macro_rules! group_box_apply_template {
 }
 
 group_box_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="GroupBox@Content")]
     pub struct GroupBoxTemplate in template { }
 }

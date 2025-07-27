@@ -39,3 +39,4 @@ pub mod pile_panel;
 pub mod adorners_panel;
 pub mod padding;
 pub mod input_line;
+pub mod items_control;

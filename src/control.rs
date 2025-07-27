@@ -170,7 +170,7 @@ macro_rules! control_apply_template {
 }
 
 control_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Control")]
     pub struct ControlTemplate in template { }
 }

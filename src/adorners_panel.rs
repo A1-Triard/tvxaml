@@ -93,7 +93,7 @@ macro_rules! adorners_panel_apply_template {
 }
 
 adorners_panel_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="AdornersPanel@Children")]
     pub struct AdornersPanelTemplate in adorners_panel_template { }
 }

@@ -69,7 +69,7 @@ macro_rules! radio_group_apply_template {
 }
 
 radio_group_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="RadioGroup")]
     pub struct RadioGroupTemplate in radio_group_template { }
 }
@@ -328,7 +328,7 @@ macro_rules! radio_button_apply_template {
 }
 
 radio_button_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="RadioButton@Text")]
     pub struct RadioButtonTemplate in radio_button_template { }
 }

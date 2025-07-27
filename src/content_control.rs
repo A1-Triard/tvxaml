@@ -189,6 +189,9 @@ macro_rules! content_control_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub text_color: Option<($crate::base::Fg, $crate::base::Bg)>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub content_template: Option<Box<dyn $crate::template::Template>>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -211,13 +214,16 @@ macro_rules! content_control_apply_template {
                 obj.set_content(Some($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap()))
             );
             $this.text.as_ref().map(|x| obj.set_text($crate::alloc_rc_Rc::new(x.clone())));
-            $this.text_color.map(|x| obj.set_text_color(x))
+            $this.text_color.map(|x| obj.set_text_color(x));
+            $this.content_template.as_ref().map(|x|
+                obj.set_content_template(Some($crate::alloc_rc_Rc::from(x.clone())))
+            );
         }
     };
 }
 
 content_control_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="ContentControl@Content")]
     pub struct ContentControlTemplate in template { }
 }

@@ -141,7 +141,7 @@ macro_rules! stack_panel_apply_template {
 }
 
 stack_panel_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="StackPanel@Children")]
     pub struct StackPanelTemplate in template { }
 }

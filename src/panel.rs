@@ -129,7 +129,7 @@ macro_rules! panel_apply_template {
 }
 
 panel_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Panel@Children")]
     pub struct PanelTemplate in template { }
 }

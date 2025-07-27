@@ -102,7 +102,7 @@ macro_rules! padding_apply_template {
 }
 
 padding_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Padding@Child")]
     pub struct PaddingTemplate in template { }
 }

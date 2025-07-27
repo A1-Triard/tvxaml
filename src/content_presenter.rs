@@ -313,7 +313,7 @@ macro_rules! content_presenter_apply_template {
 }
 
 content_presenter_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="ContentPresenter@Content")]
     pub struct ContentPresenterTemplate in template { }
 }

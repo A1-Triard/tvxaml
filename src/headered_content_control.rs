@@ -177,6 +177,9 @@ macro_rules! headered_content_control_template {
                 #[serde(default)]
                 #[serde(skip_serializing_if="Option::is_none")]
                 pub header_text: Option<String>,
+                #[serde(default)]
+                #[serde(skip_serializing_if="Option::is_none")]
+                pub header_template: Option<Box<dyn $crate::template::Template>>,
                 $($(
                     $(#[$field_attr])*
                     pub $field_name : $field_ty
@@ -199,12 +202,15 @@ macro_rules! headered_content_control_apply_template {
                 obj.set_header(Some($crate::dynamic_cast_dyn_cast_rc(x.load_content($names)).unwrap()))
             );
             $this.header_text.as_ref().map(|x| obj.set_header_text($crate::alloc_rc_Rc::new(x.clone())));
+            $this.header_template.as_ref().map(|x|
+                obj.set_header_template(Some($crate::alloc_rc_Rc::from(x.clone())))
+            );
         }
     };
 }
 
 headered_content_control_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="HeaderedContentControl@Content")]
     pub struct HeaderedContentControlTemplate in template { }
 }

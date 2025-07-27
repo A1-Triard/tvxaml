@@ -58,7 +58,7 @@ macro_rules! layout_apply_template {
 }
 
 layout_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Layout")]
     pub struct LayoutTemplate in layout_template { }
 }
@@ -363,7 +363,7 @@ macro_rules! view_apply_template {
 }
 
 view_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="View")]
     pub struct ViewTemplate in view_template { }
 }

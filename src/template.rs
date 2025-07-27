@@ -1,4 +1,5 @@
 use basic_oop::obj::IsObj;
+use dyn_clone::{DynClone, clone_trait_object};
 use hashbrown::HashMap;
 use std::rc::Rc;
 
@@ -74,7 +75,7 @@ impl NameResolver {
 }
 
 #[typetag::serde]
-pub trait Template {
+pub trait Template: DynClone {
     fn is_name_scope(&self) -> bool {
         false
     }
@@ -106,6 +107,8 @@ pub trait Template {
         (root, names)
     }
 }
+
+clone_trait_object!(Template);
 
 #[macro_export]
 macro_rules! template {

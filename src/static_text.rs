@@ -427,7 +427,7 @@ macro_rules! static_text_apply_template {
 }
 
 static_text_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="StaticText@Text")]
     pub struct StaticTextTemplate in static_text_template { }
 }

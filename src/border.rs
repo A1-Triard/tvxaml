@@ -164,7 +164,7 @@ macro_rules! border_apply_template {
 }
 
 border_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Border@Child")]
     pub struct BorderTemplate in template { }
 }

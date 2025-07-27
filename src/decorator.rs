@@ -145,7 +145,7 @@ macro_rules! decorator_apply_template {
 }
 
 decorator_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Decorator@Child")]
     pub struct DecoratorTemplate in template { }
 }

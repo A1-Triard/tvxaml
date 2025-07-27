@@ -84,7 +84,7 @@ macro_rules! pile_panel_apply_template {
 }
 
 pile_panel_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="PilePanel@Children")]
     pub struct PilePanelTemplate in pile_panel_template { }
 }

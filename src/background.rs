@@ -133,7 +133,7 @@ macro_rules! background_apply_template {
 }
 
 background_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="Background@Child")]
     pub struct BackgroundTemplate in template { }
 }

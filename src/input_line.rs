@@ -601,7 +601,7 @@ macro_rules! input_line_apply_template {
 }
 
 input_line_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="InputLine")]
     pub struct InputLineTemplate in template { }
 }

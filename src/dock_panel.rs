@@ -91,7 +91,7 @@ macro_rules! dock_layout_apply_template {
 }
 
 dock_layout_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="DockLayout@Dock")]
     pub struct DockLayoutTemplate in dock_layout_template { }
 }
@@ -316,7 +316,7 @@ macro_rules! dock_panel_apply_template {
 }
 
 dock_panel_template! {
-    #[derive(serde::Serialize, serde::Deserialize, Default)]
+    #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
     #[serde(rename="DockPanel@Children")]
     pub struct DockPanelTemplate in dock_panel_template { }
 }
